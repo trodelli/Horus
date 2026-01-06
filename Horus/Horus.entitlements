@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- App Sandbox - Required for Mac App Store and recommended for all apps -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    
+    <!-- Network: Outgoing Connections (Client) - Required for API calls -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    
+    <!-- File Access: User Selected Files (Read/Write) - Required for importing/exporting documents -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    
+    <!-- File Access: Downloads Folder (Read/Write) - For default export location -->
+    <key>com.apple.security.files.downloads.read-write</key>
+    <true/>
+</dict>
+</plist>
