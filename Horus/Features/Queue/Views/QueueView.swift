@@ -37,6 +37,12 @@ struct QueueView: View {
             
             Divider()
             
+            // Quick Processing Options (visible when queue has documents and not processing)
+            if !appState.queueDocuments.isEmpty && !appState.isProcessing {
+                QuickProcessingOptionsView()
+                Divider()
+            }
+            
             // Content
             ZStack {
                 if appState.queueDocuments.isEmpty {
@@ -126,7 +132,7 @@ struct QueueView: View {
         [.pdf, .png, .jpeg, .tiff, .gif, .webP]
     }
     
-    // MARK: - Enhanced Processing Status Bar (NEW)
+    // MARK: - Enhanced Processing Status Bar
     
     private var processingStatusBar: some View {
         VStack(spacing: 8) {
@@ -142,12 +148,10 @@ struct QueueView: View {
                             .font(.system(size: 12, weight: .medium))
                             .lineLimit(1)
                         
-                        // Page progress
-                        if let progress = appState.processingViewModel.currentProgress {
-                            Text("Page \(progress.currentPage) of \(progress.totalPages)")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
+                        // Current phase text
+                        Text(appState.processingViewModel.currentPhaseText)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
                     }
                     
                     Spacer()
@@ -173,15 +177,23 @@ struct QueueView: View {
                 }
             }
             
-            // Overall progress bar
-            ProgressView(value: appState.processingViewModel.overallProgress)
+            // Indeterminate progress bar for current document (animated)
+            ProgressView()
                 .progressViewStyle(.linear)
             
-            // Per-document progress bar (if multi-page)
-            if let progress = appState.processingViewModel.currentProgress, progress.totalPages > 1 {
-                ProgressView(value: progress.percentComplete)
-                    .progressViewStyle(.linear)
-                    .tint(.green)
+            // Overall batch progress bar (determinate) - only show if batch has multiple docs
+            if appState.processingViewModel.totalCount > 1 {
+                HStack(spacing: 8) {
+                    ProgressView(value: appState.processingViewModel.overallProgress)
+                        .progressViewStyle(.linear)
+                        .tint(.green)
+                    
+                    Text("\(Int(appState.processingViewModel.overallProgress * 100))%")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 32, alignment: .trailing)
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -550,9 +562,9 @@ struct DocumentRow: View {
                 
                 statusText
                 
-                // Detailed progress bar for processing documents
-                if showDetailedProgress, case .processing(let progress) = document.status {
-                    ProgressView(value: progress.percentComplete)
+                // Indeterminate progress bar for processing documents
+                if showDetailedProgress, case .processing = document.status {
+                    ProgressView()
                         .progressViewStyle(.linear)
                         .frame(height: 4)
                 }
@@ -636,11 +648,9 @@ struct DocumentRow: View {
             }
             
         case .processing(let progress):
-            HStack(spacing: 4) {
-                Text("Page \(progress.currentPage) of \(progress.totalPages)")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.blue)
-            }
+            Text(progress.phase.displayText)
+                .font(.system(size: 11))
+                .foregroundStyle(.blue)
             
         case .completed:
             Text("Completed")

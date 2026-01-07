@@ -43,6 +43,10 @@ struct LibraryView: View {
             previewPane
                 .frame(minWidth: 350)
         }
+        // Reset page selection when document changes
+        .onChange(of: appState.selectedLibraryDocumentId) { _, _ in
+            appState.selectedPageIndex = 0
+        }
         // Keyboard shortcut: Delete key removes selected document
         .onDeleteCommand {
             if let document = appState.selectedLibraryDocument {
@@ -280,6 +284,12 @@ struct LibraryView: View {
         VStack(spacing: 0) {
             if let doc = appState.selectedLibraryDocument {
                 previewToolbar(for: doc)
+                
+                // Statistics bar (shows key metrics at a glance)
+                if let result = doc.result {
+                    ProcessingStatsBar(result: result, fileSize: doc.fileSize)
+                }
+                
                 Divider()
                 previewContent(for: doc)
                 Divider()
@@ -354,14 +364,36 @@ struct LibraryView: View {
             ScrollView {
                 switch previewMode {
                 case .rendered:
-                    MarkdownPreview(markdown: result.fullMarkdown)
+                    // Use paged preview for multi-page documents to show page markers
+                    if result.pages.count > 1 {
+                        PagedMarkdownPreview(
+                            pages: result.pages,
+                            showPageMarkers: true,
+                            scrollToPage: appState.selectedPageIndex
+                        )
                         .padding(20)
+                    } else {
+                        // Single page - use simpler view without markers
+                        MarkdownPreview(markdown: result.fullMarkdown)
+                            .padding(20)
+                    }
                 case .raw:
-                    Text(result.fullMarkdown)
-                        .font(.system(size: 12, design: .monospaced))
-                        .textSelection(.enabled)
+                    // Use paged raw preview for multi-page documents
+                    if result.pages.count > 1 {
+                        PagedRawPreview(
+                            pages: result.pages,
+                            showPageMarkers: true,
+                            scrollToPage: appState.selectedPageIndex
+                        )
                         .padding(20)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        // Single page - simpler raw view
+                        Text(result.fullMarkdown)
+                            .font(.system(size: 12, design: .monospaced))
+                            .textSelection(.enabled)
+                            .padding(20)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             }
         } else {
@@ -386,7 +418,7 @@ struct LibraryView: View {
                 Label("\(result.wordCount.formatted()) words", systemImage: "textformat")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
-                Label("\(result.characterCount.formatted()) chars", systemImage: "character")
+                Label(result.formattedTokenCount + " tokens", systemImage: "number")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }

@@ -10,11 +10,12 @@ import UniformTypeIdentifiers
 import AppKit
 
 /// The primary application window with tab-based navigation.
-/// Two-column layout: Navigation Sidebar + Tab Content
+/// Three-column layout: Navigation Sidebar + Tab Content + Inspector (optional)
 struct MainWindowView: View {
     
     @Environment(AppState.self) private var appState
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var inspectorIsShown: Bool = true
     
     var body: some View {
         mainContent
@@ -70,13 +71,28 @@ struct MainWindowView: View {
             NavigationSidebarView()
                 .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 250)
         } detail: {
-            tabContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            HSplitView {
+                tabContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                
+                // Inspector panel (toggleable)
+                if inspectorIsShown && appState.selectedTab != .settings {
+                    InspectorView()
+                        .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
+                }
+            }
         }
         .navigationTitle("")
         .navigationSubtitle(navigationSubtitle)
         .toolbar {
             toolbarContent
+        }
+        .onAppear {
+            inspectorIsShown = appState.preferences.showInspector
+        }
+        .onChange(of: inspectorIsShown) { _, newValue in
+            appState.preferences.showInspector = newValue
+            appState.preferences.save()
         }
     }
     
@@ -169,6 +185,24 @@ struct MainWindowView: View {
                 libraryToolbarItems
             case .settings:
                 EmptyView()
+            }
+        }
+        
+        // Inspector toggle button (like Finder)
+        ToolbarItem(placement: .automatic) {
+            if appState.selectedTab != .settings {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        inspectorIsShown.toggle()
+                    }
+                } label: {
+                    Label(
+                        inspectorIsShown ? "Hide Inspector" : "Show Inspector",
+                        systemImage: "sidebar.trailing"
+                    )
+                }
+                .help(inspectorIsShown ? "Hide Inspector (⌥⌘I)" : "Show Inspector (⌥⌘I)")
+                .keyboardShortcut("i", modifiers: [.option, .command])
             }
         }
     }

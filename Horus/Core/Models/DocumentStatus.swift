@@ -38,10 +38,7 @@ enum DocumentStatus: Equatable, Hashable {
         case .validating:
             return "Validating..."
         case .processing(let progress):
-            if progress.totalPages > 0 {
-                return "Processing page \(progress.currentPage) of \(progress.totalPages)"
-            }
-            return "Processing..."
+            return progress.phase.displayText
         case .completed:
             return "Completed"
         case .failed(let message):
@@ -133,11 +130,7 @@ enum DocumentStatus: Equatable, Hashable {
         case .validating:
             return "Validating document"
         case .processing(let progress):
-            if progress.totalPages > 0 {
-                let percent = Int((Double(progress.currentPage) / Double(progress.totalPages)) * 100)
-                return "Processing, \(percent) percent complete"
-            }
-            return "Processing"
+            return progress.phase.displayText
         case .completed:
             return "Completed successfully"
         case .failed(let message):
@@ -152,38 +145,106 @@ enum DocumentStatus: Equatable, Hashable {
 
 /// Tracks progress during OCR processing
 struct ProcessingProgress: Equatable, Hashable {
-    /// Current page being processed (1-indexed for display)
-    let currentPage: Int
+    /// Current processing phase
+    let phase: ProcessingPhase
     
-    /// Total pages in the document
+    /// Total pages in the document (for display purposes)
     let totalPages: Int
+    
+    /// Current page being processed (optional, for more detailed tracking)
+    let currentPage: Int
     
     /// When processing started
     let startedAt: Date
-    
-    /// Percentage complete (0.0 to 1.0)
-    var percentComplete: Double {
-        guard totalPages > 0 else { return 0 }
-        return Double(currentPage) / Double(totalPages)
-    }
     
     /// Elapsed time since processing started
     var elapsedTime: TimeInterval {
         Date().timeIntervalSince(startedAt)
     }
     
-    /// Estimated time remaining based on current progress
+    /// Estimated percentage complete (0.0 to 1.0)
+    var percentComplete: Double {
+        // Map phases to approximate completion percentages
+        switch phase {
+        case .preparing:
+            return 0.1  // 10% for preparing
+        case .uploading:
+            return 0.3  // 30% for uploading
+        case .processing:
+            // Main processing phase is 30% to 90%
+            if totalPages > 0 && currentPage > 0 {
+                let pageProgress = Double(currentPage) / Double(totalPages)
+                return 0.3 + (pageProgress * 0.6)  // Scale from 30% to 90%
+            }
+            return 0.6  // Default to 60% if no page info
+        case .finalizing:
+            return 0.95  // 95% for finalizing
+        }
+    }
+    
+    /// Estimated time remaining based on elapsed time and progress
     var estimatedTimeRemaining: TimeInterval? {
-        guard currentPage > 0, totalPages > currentPage else { return nil }
-        let timePerPage = elapsedTime / Double(currentPage)
-        let remainingPages = totalPages - currentPage
-        return timePerPage * Double(remainingPages)
+        let progress = percentComplete
+        guard progress > 0.1 else {
+            return nil  // Too early to estimate
+        }
+        
+        let totalEstimated = elapsedTime / progress
+        let remaining = totalEstimated - elapsedTime
+        
+        return max(0, remaining)
     }
     
     /// Creates a new progress instance
-    init(currentPage: Int = 0, totalPages: Int = 0, startedAt: Date = Date()) {
-        self.currentPage = currentPage
+    init(phase: ProcessingPhase = .preparing, totalPages: Int = 0, currentPage: Int = 0, startedAt: Date = Date()) {
+        self.phase = phase
         self.totalPages = totalPages
+        self.currentPage = currentPage
         self.startedAt = startedAt
+    }
+}
+
+// MARK: - Processing Phase
+
+/// Represents the current phase of document processing
+enum ProcessingPhase: Equatable, Hashable {
+    /// Preparing the document for upload
+    case preparing
+    
+    /// Uploading document to Mistral servers
+    case uploading
+    
+    /// Processing with OCR (main processing phase)
+    case processing
+    
+    /// Finalizing and receiving results
+    case finalizing
+    
+    /// Display text for the phase
+    var displayText: String {
+        switch self {
+        case .preparing:
+            return "Preparing document..."
+        case .uploading:
+            return "Uploading to server..."
+        case .processing:
+            return "Processing with OCR..."
+        case .finalizing:
+            return "Finalizing..."
+        }
+    }
+    
+    /// Short display text
+    var shortText: String {
+        switch self {
+        case .preparing:
+            return "Preparing"
+        case .uploading:
+            return "Uploading"
+        case .processing:
+            return "Processing"
+        case .finalizing:
+            return "Finalizing"
+        }
     }
 }

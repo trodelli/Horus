@@ -47,6 +47,9 @@ final class AppState {
     var selectedQueueDocumentId: UUID?
     var selectedLibraryDocumentId: UUID?
     
+    /// Currently selected page index for preview navigation (0-indexed)
+    var selectedPageIndex: Int = 0
+    
     // MARK: - UI State
     
     var showOnboarding: Bool = false
@@ -127,6 +130,9 @@ final class AppState {
     }
     
     func selectDocument(_ document: Document) {
+        // Reset page selection when changing documents
+        selectedPageIndex = 0
+        
         if document.isCompleted {
             selectedTab = .library
             selectedLibraryDocumentId = document.id
@@ -403,11 +409,11 @@ final class AppState {
             suggestion = docError.recoverySuggestion
         } else if let ocrError = error as? OCRError {
             title = "Processing Error"
-            message = ocrError.localizedDescription ?? "Unknown error"
+            message = ocrError.localizedDescription
             suggestion = ocrError.recoverySuggestion
         } else if let exportError = error as? ExportError {
             title = "Export Error"
-            message = exportError.localizedDescription ?? "Unknown error"
+            message = exportError.localizedDescription
             suggestion = exportError.recoverySuggestion
         } else {
             title = "Error"

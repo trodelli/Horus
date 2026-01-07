@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Horus/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" width="128" height="128" alt="Horus App Icon">
+  <img src="Icon/Horus Icon 256x256.png" width="128" height="128" alt="Horus App Icon">
 </p>
 
 <h1 align="center">Horus</h1>
@@ -9,13 +9,14 @@
 </p>
 
 <p align="center">
-  A native macOS app for OCR document processing, powered by Mistral AI
+  A native macOS application that transforms your PDFs and images into clean, structured markdown using Mistral's advanced OCR technology.
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/macOS-14.0+-blue?style=flat-square" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Swift-5.9+-orange?style=flat-square" alt="Swift 5.9+">
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License">
+  <img src="https://img.shields.io/badge/Version-2.0.0-purple?style=flat-square" alt="Version 2.0.0">
 </p>
 
 <p align="center">
@@ -24,12 +25,22 @@
 
 ---
 
+## ✨ What's New in v2.0
+
+- 📑 **Page Navigation** — Scrollable thumbnail sidebar for multi-page documents
+- 🖱️ **Click-to-Scroll** — Click any thumbnail to jump to that page instantly
+- 🔄 **Improved Progress** — Honest phase-based progress tracking
+- ℹ️ **About Window** — Beautiful About screen with app information
+
+---
+
 ## Why Horus?
 
 **Horus** brings state-of-the-art OCR to your Mac. Drop in a stack of PDFs or images, and Horus extracts clean, structured text using Mistral AI's powerful document understanding API. No subscriptions, no cloud lock-in—just your API key and your documents.
 
 - 📄 **Batch Processing** — Queue up dozens of documents and process them all at once
-- ⚡ **Lightning Fast** — Watch real-time progress with page-by-page updates
+- 📑 **Page Navigation** — Browse multi-page documents with thumbnail previews
+- ⚡ **Lightning Fast** — Watch real-time progress as documents are processed
 - 💰 **Cost Transparent** — Know exactly what you'll pay before you process ($0.001/page)
 - 📝 **Clean Output** — Export as Markdown, JSON, or plain text
 - 🔒 **Private & Secure** — API keys stored in your Mac's Keychain, documents processed directly with Mistral
@@ -65,7 +76,7 @@
 
 Download the latest release from the [Releases](https://github.com/trodelli/horus/releases) page:
 
-1. Download `Horus-1.0.0.dmg`
+1. Download `Horus-2.0.0.dmg`
 2. Open the DMG and drag **Horus** to your Applications folder
 3. Launch Horus
 
@@ -83,8 +94,30 @@ Horus uses [Mistral AI](https://mistral.ai) for OCR processing:
 
 1. **Add documents** — Drag PDFs or images into Horus, or click **Add Documents**
 2. **Review the queue** — Check estimated pages and costs
-3. **Click Process All** — Sit back and watch the magic happen
-4. **Export results** — Save as Markdown, JSON, or copy to clipboard
+3. **Click Process All** — Watch the progress as your documents are processed
+4. **Browse results** — Use page thumbnails to navigate multi-page documents
+5. **Export** — Save as Markdown, JSON, or copy to clipboard
+
+---
+
+## Features
+
+### Page Navigation (New in v2.0)
+
+For multi-page documents, Horus displays a scrollable thumbnail sidebar in the Inspector panel:
+
+- **Visual Preview** — See all pages at a glance
+- **Click to Navigate** — Click any thumbnail to scroll the preview to that page
+- **Smart Loading** — Thumbnails load lazily with intelligent prefetching
+- **Memory Efficient** — LRU cache keeps memory usage low even for large documents
+
+### Processing Progress
+
+Horus provides honest, clear progress indication:
+
+- **Phase Display** — See exactly what's happening: Preparing → Uploading → Processing → Finalizing
+- **Batch Progress** — Visual percentage for multi-document processing
+- **Time Estimates** — Estimated time remaining based on completed documents
 
 ---
 
@@ -175,7 +208,7 @@ See [BUILDING.md](BUILDING.md) for creating a distributable DMG.
 
 1. **Queue** — Add documents, see page counts and cost estimates
 2. **Process** — Documents are uploaded to Mistral's API for OCR
-3. **Library** — Browse results with rendered Markdown preview
+3. **Library** — Browse results with rendered Markdown preview and page navigation
 4. **Export** — Save to files or copy directly to clipboard
 
 ---
@@ -189,6 +222,7 @@ See [BUILDING.md](BUILDING.md) for creating a distributable DMG.
 | Networking | Swift Concurrency (`async/await`) |
 | Security | macOS Keychain Services |
 | PDF Handling | PDFKit |
+| Thumbnail Caching | Custom LRU Cache |
 
 ---
 
@@ -220,7 +254,7 @@ Free to use, modify, and distribute.
 ---
 
 <p align="center">
-  <strong>Made with ❤️ for the Mac</strong>
+  <strong>DESIGN BY THEWAY.INK · BUILT WITH AI · MADE IN MARSEILLE</strong>
 </p>
 
 <p align="center">

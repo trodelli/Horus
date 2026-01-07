@@ -44,45 +44,8 @@ struct NavigationSidebarView: View {
                 }
             }
             .listStyle(.sidebar)
-            
-            Spacer()
-            
-            if appState.isProcessing {
-                processingStatusFooter
-            }
         }
         .frame(minWidth: 180)
-    }
-    
-    private var processingStatusFooter: some View {
-        VStack(spacing: 8) {
-            Divider()
-            
-            HStack(spacing: 8) {
-                ProgressView()
-                    .scaleEffect(0.7)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Processing...")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                    
-                    Text("\(appState.processingViewModel.completedCount)/\(appState.processingViewModel.totalCount)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                
-                Spacer()
-                
-                if appState.isProcessingPaused {
-                    Image(systemName: "pause.circle.fill")
-                        .foregroundStyle(.orange)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 12)
-        }
-        .background(.bar)
     }
 }
 

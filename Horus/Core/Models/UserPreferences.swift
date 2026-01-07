@@ -47,6 +47,15 @@ struct UserPreferences: Codable, Equatable {
     /// Table format preference
     var tableFormat: TableFormatPreference = .markdown
     
+    /// Whether to extract headers separately
+    var extractHeaders: Bool = false
+    
+    /// Whether to extract footers separately
+    var extractFooters: Bool = false
+    
+    /// Whether the quick processing options panel is expanded in Queue view
+    var showQuickProcessingOptions: Bool = false
+    
     // MARK: - UI Settings
     
     /// Whether to show the sidebar
@@ -83,6 +92,9 @@ struct UserPreferences: Codable, Equatable {
         case lastExportLocationPath
         case includeImagesInOCR
         case tableFormat
+        case extractHeaders
+        case extractFooters
+        case showQuickProcessingOptions
         case showSidebar
         case showInspector
         case previewMode
@@ -107,6 +119,9 @@ struct UserPreferences: Codable, Equatable {
         lastExportLocationPath = try container.decodeIfPresent(String.self, forKey: .lastExportLocationPath)
         includeImagesInOCR = try container.decodeIfPresent(Bool.self, forKey: .includeImagesInOCR) ?? false
         tableFormat = try container.decodeIfPresent(TableFormatPreference.self, forKey: .tableFormat) ?? .markdown
+        extractHeaders = try container.decodeIfPresent(Bool.self, forKey: .extractHeaders) ?? false
+        extractFooters = try container.decodeIfPresent(Bool.self, forKey: .extractFooters) ?? false
+        showQuickProcessingOptions = try container.decodeIfPresent(Bool.self, forKey: .showQuickProcessingOptions) ?? false
         showSidebar = try container.decodeIfPresent(Bool.self, forKey: .showSidebar) ?? true
         showInspector = try container.decodeIfPresent(Bool.self, forKey: .showInspector) ?? true
         previewMode = try container.decodeIfPresent(PreviewMode.self, forKey: .previewMode) ?? .rendered
@@ -127,6 +142,9 @@ struct UserPreferences: Codable, Equatable {
         try container.encodeIfPresent(lastExportLocationPath, forKey: .lastExportLocationPath)
         try container.encode(includeImagesInOCR, forKey: .includeImagesInOCR)
         try container.encode(tableFormat, forKey: .tableFormat)
+        try container.encode(extractHeaders, forKey: .extractHeaders)
+        try container.encode(extractFooters, forKey: .extractFooters)
+        try container.encode(showQuickProcessingOptions, forKey: .showQuickProcessingOptions)
         try container.encode(showSidebar, forKey: .showSidebar)
         try container.encode(showInspector, forKey: .showInspector)
         try container.encode(previewMode, forKey: .previewMode)
@@ -144,6 +162,9 @@ struct UserPreferences: Codable, Equatable {
         lastExportLocationPath: String? = nil,
         includeImagesInOCR: Bool = false,
         tableFormat: TableFormatPreference = .markdown,
+        extractHeaders: Bool = false,
+        extractFooters: Bool = false,
+        showQuickProcessingOptions: Bool = false,
         showSidebar: Bool = true,
         showInspector: Bool = true,
         previewMode: PreviewMode = .rendered
@@ -157,6 +178,9 @@ struct UserPreferences: Codable, Equatable {
         self.lastExportLocationPath = lastExportLocationPath
         self.includeImagesInOCR = includeImagesInOCR
         self.tableFormat = tableFormat
+        self.extractHeaders = extractHeaders
+        self.extractFooters = extractFooters
+        self.showQuickProcessingOptions = showQuickProcessingOptions
         self.showSidebar = showSidebar
         self.showInspector = showInspector
         self.previewMode = previewMode

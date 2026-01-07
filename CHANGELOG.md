@@ -5,6 +5,37 @@ All notable changes to Horus will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-01-07
+
+### Added
+
+- **Page Navigation System** — Scrollable thumbnail sidebar in Inspector for multi-page documents
+- **Click-to-Scroll Navigation** — Click any page thumbnail to instantly scroll to that page in preview
+- **LRU Thumbnail Cache** — Efficient caching system (100 thumbnails max) with lazy loading
+- **Thumbnail Prefetching** — Automatically loads thumbnails for nearby pages (±5 buffer)
+- **Custom About Window** — Beautiful About window with app description and attribution
+- **Phase-Based Progress** — Clear progress phases: Preparing → Uploading → Processing → Finalizing
+- **Batch Progress Percentage** — Visual percentage indicator for multi-document batches
+
+### Changed
+
+- **Progress Tracking** — Replaced misleading page-level progress with honest phase-based updates
+- **Processing Status Bar** — Indeterminate progress bar for current document (since API doesn't provide page-level progress)
+- **About Menu** — Now opens custom About window instead of navigating to Settings
+
+### Removed
+
+- **Sidebar Progress Indicator** — Removed redundant progress display from navigation sidebar
+- **Page-Level Progress Bar** — Removed inaccurate page progress (API returns all pages at once)
+
+### Improved
+
+- **Memory Management** — Optimized thumbnail handling for documents with 500+ pages
+- **Large Document Support** — Warning indicator for documents over 500 pages
+- **Preview Scrolling** — Smooth animated scrolling when navigating between pages
+
+---
+
 ## [1.0.0] - 2026-01-06
 
 ### Added
@@ -51,4 +82,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 2.0.0 | 2026-01-07 | Page navigation, improved progress UX, About window |
 | 1.0.0 | 2026-01-06 | Initial release |

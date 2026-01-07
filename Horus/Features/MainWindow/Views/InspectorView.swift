@@ -71,6 +71,9 @@ struct InspectorView: View {
                 // Document header
                 documentHeader(document)
                 
+                // Original document preview thumbnail
+                originalPreviewSection(document)
+                
                 Divider()
                 
                 // File information
@@ -116,6 +119,38 @@ struct InspectorView: View {
                     Text(".\(document.fileExtension)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+    
+    private func originalPreviewSection(_ document: Document) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // For completed documents with multiple pages, show scrollable thumbnails
+            if let result = document.result, result.pageCount > 1 {
+                PageThumbnailsView(
+                    documentURL: document.sourceURL,
+                    pageCount: result.pageCount,
+                    selectedPage: Binding(
+                        get: { appState.selectedPageIndex },
+                        set: { appState.selectedPageIndex = $0 }
+                    )
+                )
+                .frame(maxHeight: 350)
+            } else {
+                // Single page or not yet processed - show cover thumbnail
+                Text("Original")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                
+                HStack {
+                    Spacer()
+                    InteractiveThumbnailView(
+                        url: document.sourceURL,
+                        thumbnailSize: CGSize(width: 160, height: 200)
+                    )
+                    Spacer()
                 }
             }
         }
@@ -197,6 +232,7 @@ struct InspectorView: View {
                 InspectorRow(label: "Pages", value: "\(result.pageCount)")
                 InspectorRow(label: "Words", value: "\(result.wordCount.formatted())")
                 InspectorRow(label: "Characters", value: "\(result.characterCount.formatted())")
+                InspectorRow(label: "Tokens", value: result.formattedTokenCount)
                 InspectorRow(label: "Duration", value: result.formattedDuration)
                 InspectorRow(label: "Cost", value: result.formattedCost)
                 

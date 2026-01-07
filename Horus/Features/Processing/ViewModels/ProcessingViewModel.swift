@@ -264,17 +264,17 @@ final class ProcessingViewModel {
             } catch let error as OCRError {
                 // Handle OCR error
                 var failedDocument = document
-                failedDocument.status = .failed(message: error.localizedDescription ?? "Unknown error")
+                failedDocument.status = .failed(message: error.localizedDescription)
                 failedDocument.error = DocumentError(
                     code: String(describing: error),
-                    message: error.localizedDescription ?? "Unknown error",
+                    message: error.localizedDescription,
                     isRetryable: error.isRetryable
                 )
                 session.updateDocument(failedDocument)
                 
                 failedCount += 1
                 
-                logger.error("Failed: \(document.displayName) - \(error.localizedDescription ?? "Unknown error")")
+                logger.error("Failed: \(document.displayName) - \(error.localizedDescription)")
                 
             } catch {
                 // Handle unexpected error
@@ -378,9 +378,9 @@ final class ProcessingViewModel {
         return Double(completedCount + failedCount) / Double(totalCount)
     }
     
-    /// Current document progress (0.0 to 1.0)
-    var currentDocumentProgress: Double {
-        currentProgress?.percentComplete ?? 0
+    /// Current processing phase display text
+    var currentPhaseText: String {
+        currentProgress?.phase.displayText ?? "Processing..."
     }
     
     /// Status text for display
@@ -393,12 +393,8 @@ final class ProcessingViewModel {
             return "Paused"
         }
         
-        if let document = currentDocument, let progress = currentProgress {
-            if progress.totalPages > 1 {
-                return "Processing \(document.displayName) (page \(progress.currentPage)/\(progress.totalPages))"
-            } else {
-                return "Processing \(document.displayName)"
-            }
+        if let document = currentDocument {
+            return "Processing \(document.displayName)"
         }
         
         return "Processing..."

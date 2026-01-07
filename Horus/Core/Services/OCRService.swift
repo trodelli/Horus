@@ -79,15 +79,29 @@ final class OCRService: OCRServiceProtocol {
         
         // Create the processing task
         let task = Task<OCRResult, Error> {
-            // Report initial progress
+            // Report initial progress - preparing phase
             onProgress(ProcessingProgress(
-                currentPage: 0,
+                phase: .preparing,
+                totalPages: totalPages,
+                startedAt: startTime
+            ))
+            
+            // Report uploading phase
+            onProgress(ProcessingProgress(
+                phase: .uploading,
                 totalPages: totalPages,
                 startedAt: startTime
             ))
             
             // Prepare document - upload if PDF, or create data URL if image
             let documentPayload = try await prepareDocumentPayload(document, apiKey: apiKey)
+            
+            // Report processing phase
+            onProgress(ProcessingProgress(
+                phase: .processing,
+                totalPages: totalPages,
+                startedAt: startTime
+            ))
             
             // Build request
             let request = OCRAPIRequest(
@@ -105,15 +119,15 @@ final class OCRService: OCRServiceProtocol {
             // Make API call with retry logic
             let response = try await performRequestWithRetry(
                 request: request,
-                apiKey: apiKey,
-                onProgress: { progress in
-                    onProgress(ProcessingProgress(
-                        currentPage: progress,
-                        totalPages: totalPages,
-                        startedAt: startTime
-                    ))
-                }
+                apiKey: apiKey
             )
+            
+            // Report finalizing phase
+            onProgress(ProcessingProgress(
+                phase: .finalizing,
+                totalPages: totalPages,
+                startedAt: startTime
+            ))
             
             // Check for cancellation after API call
             try Task.checkCancellation()
@@ -311,8 +325,7 @@ final class OCRService: OCRServiceProtocol {
     /// Perform request with exponential backoff retry
     private func performRequestWithRetry(
         request: OCRAPIRequest,
-        apiKey: String,
-        onProgress: @escaping (Int) -> Void
+        apiKey: String
     ) async throws -> OCRAPIResponse {
         var lastError: Error?
         
@@ -340,7 +353,7 @@ final class OCRService: OCRServiceProtocol {
                     throw error
                 }
                 
-                logger.warning("Request failed (attempt \(attempt + 1)): \(error.localizedDescription ?? "Unknown")")
+                logger.warning("Request failed (attempt \(attempt + 1)): \(error.localizedDescription)")
                 
             } catch {
                 lastError = error
@@ -633,19 +646,21 @@ final class MockOCRService: OCRServiceProtocol {
         let pageCount = document.estimatedPageCount ?? 1
         let startTime = Date()
         
-        // Simulate processing each page
-        for page in 0...pageCount {
+        // Simulate processing phases
+        let phases: [ProcessingPhase] = [.preparing, .uploading, .processing, .finalizing]
+        
+        for phase in phases {
             if shouldCancel {
                 throw OCRError.cancelled
             }
             
             onProgress(ProcessingProgress(
-                currentPage: page,
+                phase: phase,
                 totalPages: pageCount,
                 startedAt: startTime
             ))
             
-            try await Task.sleep(nanoseconds: UInt64(mockDelay * 1_000_000_000 / Double(pageCount + 1)))
+            try await Task.sleep(nanoseconds: UInt64(mockDelay * 1_000_000_000 / Double(phases.count)))
         }
         
         if let result = mockResult {

@@ -49,7 +49,7 @@ struct HorusCommands: Commands {
         
         CommandGroup(replacing: .appInfo) {
             Button("About Horus") {
-                appState.selectedTab = .settings
+                AboutWindowController.shared.showAboutWindow()
             }
         }
         

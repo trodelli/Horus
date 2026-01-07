@@ -91,6 +91,17 @@ struct OCRResult: Equatable, Hashable, Codable {
         }
     }
     
+    /// Estimated token count for LLM training purposes.
+    /// Uses combined word and character-based estimation for better accuracy.
+    var estimatedTokenCount: Int {
+        TokenEstimator.estimate(fullPlainText)
+    }
+    
+    /// Formatted token count for display (e.g., "~1,234").
+    var formattedTokenCount: String {
+        TokenEstimator.format(estimatedTokenCount)
+    }
+    
     // MARK: - Initialization
     
     init(

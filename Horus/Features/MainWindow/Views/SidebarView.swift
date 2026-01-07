@@ -476,7 +476,9 @@ struct DocumentRowView: View {
 #Preview("With Documents") {
     let state = AppState()
     
-    let docs = [
+    let progress = ProcessingProgress(phase: .processing, totalPages: 8)
+    
+    let docs: [Document] = [
         Document(
             sourceURL: URL(fileURLWithPath: "/Users/test/Document1.pdf"),
             contentType: .pdf,
@@ -489,7 +491,7 @@ struct DocumentRowView: View {
             contentType: .pdf,
             fileSize: 2_300_000,
             estimatedPageCount: 8,
-            status: .processing(progress: ProcessingProgress(currentPage: 3, totalPages: 8))
+            status: .processing(progress: progress)
         ),
         Document(
             sourceURL: URL(fileURLWithPath: "/Users/test/Invoice.pdf"),

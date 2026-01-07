@@ -70,20 +70,18 @@ enum AccessibilityLabels {
     // MARK: - Progress
     
     static func processingProgress(_ progress: ProcessingProgress) -> String {
-        let percent = Int(progress.percentComplete * 100)
-        var label = "\(percent) percent complete"
+        var label = progress.phase.displayText
         
         if progress.totalPages > 0 {
-            label += ", processing page \(progress.currentPage) of \(progress.totalPages)"
+            label += ", \(progress.totalPages) pages"
         }
         
-        if let remaining = progress.estimatedTimeRemaining {
-            if remaining < 60 {
-                label += ", about \(Int(remaining)) seconds remaining"
-            } else {
-                let minutes = Int(remaining) / 60
-                label += ", about \(minutes) minutes remaining"
-            }
+        let elapsed = progress.elapsedTime
+        if elapsed < 60 {
+            label += ", \(Int(elapsed)) seconds elapsed"
+        } else {
+            let minutes = Int(elapsed) / 60
+            label += ", \(minutes) minutes elapsed"
         }
         
         return label
@@ -131,7 +129,8 @@ extension View {
         self.onChange(of: message) { _, newValue in
             if !newValue.isEmpty {
                 #if os(macOS)
-                NSAccessibility.post(element: NSApp, notification: .announcementRequested, userInfo: [
+                guard let app = NSApp else { return }
+                NSAccessibility.post(element: app, notification: .announcementRequested, userInfo: [
                     .announcement: newValue,
                     .priority: priority == .high ? NSAccessibilityPriorityLevel.high : NSAccessibilityPriorityLevel.medium
                 ])
