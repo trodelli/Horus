@@ -53,7 +53,7 @@ struct BatchExportSheetView: View {
                 configurationView
             }
         }
-        .frame(width: 480, height: viewModel.isExporting ? 200 : (viewModel.lastBatchResult != nil ? 350 : 450))
+        .frame(width: 480, height: viewModel.isExporting ? 200 : (viewModel.lastBatchResult != nil ? 350 : 540))
     }
     
     // MARK: - Configuration View
@@ -158,20 +158,24 @@ struct BatchExportSheetView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
             
-            Picker("Format", selection: $viewModel.selectedFormat) {
+            Text("Select one or more formats to export")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+            
+            VStack(spacing: 8) {
                 ForEach(ExportFormat.allCases) { format in
-                    HStack {
-                        Image(systemName: format.symbolName)
-                        Text(format.displayName)
+                    BatchFormatCheckbox(
+                        format: format,
+                        isSelected: viewModel.selectedFormats.contains(format)
+                    ) {
+                        if viewModel.selectedFormats.contains(format) {
+                            viewModel.selectedFormats.remove(format)
+                        } else {
+                            viewModel.selectedFormats.insert(format)
+                        }
                     }
-                    .tag(format)
                 }
             }
-            .pickerStyle(.segmented)
-            
-            Text(viewModel.selectedFormat.description)
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
     
@@ -217,7 +221,7 @@ struct BatchExportSheetView: View {
             }
             .keyboardShortcut(.defaultAction)
             .buttonStyle(.borderedProminent)
-            .disabled(completedDocuments.isEmpty)
+            .disabled(completedDocuments.isEmpty || !viewModel.hasSelectedFormats)
         }
         .padding(16)
         .background(Color(.windowBackgroundColor))
@@ -396,6 +400,57 @@ struct ResultStat: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+// MARK: - Batch Format Checkbox
+
+struct BatchFormatCheckbox: View {
+    let format: ExportFormat
+    let isSelected: Bool
+    let onSelect: () -> Void
+    
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 12) {
+                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(isSelected ? .blue : .secondary)
+                    .font(.title3)
+                
+                Image(systemName: format.symbolName)
+                    .frame(width: 20)
+                    .foregroundStyle(isSelected ? .blue : .primary)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(format.displayName)
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                    
+                    Text(format.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                
+                Spacer()
+                
+                Text(".\(format.fileExtension)")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color(.quaternaryLabelColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+            .padding(10)
+            .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.blue.opacity(0.5) : Color(.separatorColor), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

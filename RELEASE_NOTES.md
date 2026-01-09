@@ -1,10 +1,10 @@
-# Horus v2.0.0
+# Horus v2.1.0
 
-🎉 **Major Update** — Page Navigation, Improved Progress UX, and more!
+🎉 **Export Improvements** — Multiple format export and better UX!
 
 ## Installation
 
-1. Download `Horus-2.0.0.dmg` below
+1. Download `Horus-2.1.0.dmg` below
 2. Open the DMG and drag Horus to Applications
 3. Launch Horus and enter your [Mistral API key](https://console.mistral.ai)
 
@@ -14,54 +14,55 @@
 
 ## ✨ What's New
 
-### 📑 Page Navigation System
-Browse multi-page documents with ease! The new thumbnail sidebar in the Inspector lets you:
-- **See all pages** at a glance with visual thumbnails
-- **Click to navigate** — jump to any page instantly
-- **Smart caching** — efficient memory usage even for large documents (500+ pages)
+### ✅ Multiple Format Export
+Export documents to multiple formats in one go!
+- **Select multiple formats** — Choose any combination of Markdown, JSON, and Plain Text
+- **Smart behavior** — Single format uses traditional Save dialog; multiple formats use folder picker
+- **Batch support** — Export entire libraries to all formats at once
+- **Clear feedback** — Checkbox interface shows exactly what you're exporting
 
-### 🔄 Improved Progress Tracking
-Honest, clear progress indication:
-- **Phase-based updates**: Preparing → Uploading → Processing → Finalizing
-- **Batch progress**: Visual percentage for multi-document processing
-- **No more misleading page progress** — we show what we actually know
+### 📏 Improved Export Window
+Better visibility and usability:
+- **Taller windows** — All export options visible without scrolling (420px → 540px)
+- **Clear instructions** — "Select one or more formats to export"
+- **Disabled state** — Export button disabled when no formats selected (prevents errors)
 
-### ℹ️ Custom About Window
-Beautiful About screen accessible from the Horus menu, featuring:
-- App description and version info
-- Attribution: *Design by THEWAY.INK · Built with AI · Made in Marseille*
+### 🚀 Enhanced Workflow
+- **Faster exports** — Get all formats you need in one operation
+- **Progress tracking** — Accurate progress for multi-format exports (documents × formats)
+- **Consistent naming** — `document.md`, `document.json`, `document.txt`
 
-### 🧹 Cleaner Interface
-- Removed redundant progress indicator from sidebar
-- Streamlined processing status bar
-- Better visual hierarchy
+---
+
+## Use Cases
+
+**LLM Training**: Export to Markdown for fine-tuning, JSON for structured data, and TXT for tokenization — all at once!
+
+**Data Pipelines**: Get both human-readable (Markdown) and machine-readable (JSON) formats in a single export.
+
+**Backup**: Export to all formats to ensure you have the data in whatever format you need later.
 
 ---
 
 ## All Changes
 
 ### Added
-- Page navigation system with scrollable thumbnail sidebar
-- Click-to-scroll page navigation
-- LRU thumbnail cache (100 thumbnails max)
-- Thumbnail prefetching (±5 pages buffer)
-- Custom About window
-- Phase-based progress tracking
-- Batch progress percentage display
+- Multiple format export (Markdown, JSON, Plain Text simultaneously)
+- Checkbox-based format selection interface
+- Smart export behavior (single format → save dialog, multiple → folder picker)
+- Batch multi-format export support
 
 ### Changed
-- Progress tracking now shows processing phases instead of (inaccurate) page numbers
-- Indeterminate progress bar for current document
-- About menu opens custom window
-
-### Removed
-- Redundant sidebar progress indicator
-- Misleading page-level progress bar
+- Export window height increased from 420px to 540px
+- Batch export window height increased from 450px to 540px
+- Export button disabled when no formats selected
+- Format selection UI changed from radio buttons to checkboxes
 
 ### Improved
-- Memory management for large documents
-- Large document warnings (500+ pages)
-- Smooth animated page scrolling
+- All export options visible without scrolling
+- Accurate progress tracking for multi-format exports
+- Consistent file naming for exported formats
+- Visual feedback with checkbox states
 
 ---
 
@@ -85,4 +86,4 @@ Beautiful About screen accessible from the Horus menu, featuring:
 
 **Full Changelog**: https://github.com/trodelli/horus/blob/main/CHANGELOG.md
 
-**Previous Release**: [v1.0.0](https://github.com/trodelli/horus/releases/tag/v1.0.0)
+**Previous Release**: [v2.0.0](https://github.com/trodelli/horus/releases/tag/v2.0.0)

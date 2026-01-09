@@ -36,8 +36,8 @@ final class ExportViewModel {
     
     // MARK: - Export Configuration
     
-    /// Selected export format
-    var selectedFormat: ExportFormat = .markdown
+    /// Selected export formats (can export to multiple formats at once)
+    var selectedFormats: Set<ExportFormat> = [.markdown]
     
     /// Whether to include metadata
     var includeMetadata: Bool = true
@@ -56,16 +56,26 @@ final class ExportViewModel {
     
     // MARK: - Computed Properties
     
-    /// Current export configuration
-    var configuration: ExportConfiguration {
+    /// Current export configuration for a specific format
+    func configuration(for format: ExportFormat) -> ExportConfiguration {
         ExportConfiguration(
-            format: selectedFormat,
+            format: format,
             includeMetadata: includeMetadata,
             includeCost: includeCost,
             includeProcessingTime: includeProcessingTime,
             prettyPrint: prettyPrintJSON,
             includeFrontMatter: includeFrontMatter
         )
+    }
+    
+    /// Whether multiple formats are selected
+    var hasMultipleFormats: Bool {
+        selectedFormats.count > 1
+    }
+    
+    /// Whether at least one format is selected
+    var hasSelectedFormats: Bool {
+        !selectedFormats.isEmpty
     }
     
     /// Progress percentage for batch export
@@ -94,10 +104,24 @@ final class ExportViewModel {
             return
         }
         
+        guard hasSelectedFormats else {
+            exportError = .noResult // Reusing error for now
+            return
+        }
+        
+        // If multiple formats selected, use folder picker
+        if hasMultipleFormats {
+            await exportDocumentToFolder(document)
+            return
+        }
+        
+        // Single format: use save panel for file
+        guard let format = selectedFormats.first else { return }
+        
         let panel = NSSavePanel()
         panel.title = "Export Document"
-        panel.nameFieldStringValue = exportService.suggestedFilename(for: document, format: selectedFormat)
-        panel.allowedContentTypes = [selectedFormat.utType]
+        panel.nameFieldStringValue = exportService.suggestedFilename(for: document, format: format)
+        panel.allowedContentTypes = [format.utType]
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
         panel.allowsOtherFileTypes = false
@@ -117,7 +141,7 @@ final class ExportViewModel {
         isExporting = true
         
         do {
-            try exportService.exportDocument(document, to: url, configuration: configuration)
+            try exportService.exportDocument(document, to: url, configuration: configuration(for: format))
             logger.info("Successfully exported \(document.displayName) to \(url.path)")
             
             // Reveal in Finder
@@ -134,6 +158,57 @@ final class ExportViewModel {
         isExporting = false
     }
     
+    /// Export document to multiple formats in a folder
+    private func exportDocumentToFolder(_ document: Document) async {
+        let panel = NSOpenPanel()
+        panel.title = "Choose Export Folder"
+        panel.message = "Select a folder to export \(document.displayName) in \(selectedFormats.count) formats"
+        panel.prompt = "Export Here"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        
+        let response: NSApplication.ModalResponse
+        if let window = NSApp.keyWindow {
+            response = await panel.beginSheetModal(for: window)
+        } else {
+            response = await panel.begin()
+        }
+        
+        guard response == .OK, let folderURL = panel.url else {
+            logger.debug("Export cancelled by user")
+            return
+        }
+        
+        isExporting = true
+        var exportedFiles: [URL] = []
+        
+        for format in selectedFormats.sorted(by: { $0.rawValue < $1.rawValue }) {
+            let filename = exportService.suggestedFilename(for: document, format: format)
+            let destination = folderURL.appendingPathComponent(filename)
+            
+            do {
+                try exportService.exportDocument(document, to: destination, configuration: configuration(for: format))
+                exportedFiles.append(destination)
+                logger.info("Successfully exported \(document.displayName) as \(format.displayName) to \(destination.path)")
+            } catch let error as ExportError {
+                exportError = error
+                logger.error("Export failed for format \(format.displayName): \(error.localizedDescription)")
+            } catch {
+                exportError = .writeFailed(destination.path)
+                logger.error("Export failed: \(error.localizedDescription)")
+            }
+        }
+        
+        isExporting = false
+        
+        // Reveal in Finder if at least one file was exported
+        if !exportedFiles.isEmpty {
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folderURL.path)
+        }
+    }
+    
     /// Export document without showing save panel (to clipboard)
     func copyToClipboard(_ document: Document, format: ExportFormat? = nil) {
         guard let result = document.result else {
@@ -142,18 +217,10 @@ final class ExportViewModel {
         }
         
         let content: String
-        let formatToUse = format ?? selectedFormat
+        let formatToUse = format ?? selectedFormats.first ?? .markdown
         
         do {
-            let config = ExportConfiguration(
-                format: formatToUse,
-                includeMetadata: includeMetadata,
-                includeCost: includeCost,
-                includeProcessingTime: includeProcessingTime,
-                prettyPrint: prettyPrintJSON,
-                includeFrontMatter: includeFrontMatter
-            )
-            content = try exportService.generateContent(for: document, configuration: config)
+            content = try exportService.generateContent(for: document, configuration: configuration(for: formatToUse))
         } catch {
             // Fallback to raw markdown
             content = result.fullMarkdown
@@ -209,39 +276,64 @@ final class ExportViewModel {
     /// Internal batch export implementation
     private func performBatchExport(documents: [Document], to folder: URL) async {
         isExporting = true
-        exportProgress = (0, documents.count)
+        
+        // Calculate total operations: documents × formats
+        let totalOperations = documents.count * selectedFormats.count
+        exportProgress = (0, totalOperations)
         lastBatchResult = nil
         
-        do {
-            let result = try await exportService.exportBatch(
-                documents,
-                to: folder,
-                configuration: configuration
-            ) { [weak self] current, total in
-                Task { @MainActor in
-                    self?.exportProgress = (current, total)
+        var allExportedFiles: [URL] = []
+        var allFailures: [(document: Document, error: Error)] = []
+        var currentOperation = 0
+        
+        for format in selectedFormats.sorted(by: { $0.rawValue < $1.rawValue }) {
+            do {
+                let result = try await exportService.exportBatch(
+                    documents,
+                    to: folder,
+                    configuration: configuration(for: format)
+                ) { [weak self] current, total in
+                    Task { @MainActor in
+                        let overallCurrent = currentOperation + current
+                        self?.exportProgress = (overallCurrent, totalOperations)
+                    }
                 }
+                
+                allExportedFiles.append(contentsOf: result.exportedFiles)
+                allFailures.append(contentsOf: result.failures)
+                currentOperation += documents.count
+                
+            } catch let error as ExportError {
+                exportError = error
+                logger.error("Batch export failed for format \(format.displayName): \(error.localizedDescription)")
+                currentOperation += documents.count
+            } catch {
+                exportError = .writeFailed(folder.path)
+                logger.error("Batch export failed: \(error.localizedDescription)")
+                currentOperation += documents.count
             }
-            
-            lastBatchResult = result
-            
-            logger.info("Batch export complete: \(result.successCount) succeeded, \(result.failureCount) failed")
-            
-            // Reveal folder in Finder
-            if result.successCount > 0 {
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
-            }
-            
-            // Post notification
-            NotificationCenter.default.post(name: .exportComplete, object: result)
-            
-        } catch let error as ExportError {
-            exportError = error
-            logger.error("Batch export failed: \(error.localizedDescription)")
-        } catch {
-            exportError = .writeFailed(folder.path)
-            logger.error("Batch export failed: \(error.localizedDescription)")
         }
+        
+        // Create combined result
+        let combinedResult = BatchExportResult(
+            successCount: allExportedFiles.count,
+            failureCount: allFailures.count,
+            exportedFiles: allExportedFiles,
+            failures: allFailures,
+            destination: folder
+        )
+        
+        lastBatchResult = combinedResult
+        
+        logger.info("Batch export complete: \(combinedResult.successCount) succeeded, \(combinedResult.failureCount) failed")
+        
+        // Reveal folder in Finder
+        if combinedResult.successCount > 0 {
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
+        }
+        
+        // Post notification
+        NotificationCenter.default.post(name: .exportComplete, object: combinedResult)
         
         isExporting = false
     }
@@ -257,16 +349,18 @@ final class ExportViewModel {
         
         isExporting = true
         
-        let filename = exportService.suggestedFilename(for: document, format: selectedFormat)
-        let destination = folder.appendingPathComponent(filename)
-        
-        do {
-            try exportService.exportDocument(document, to: destination, configuration: configuration)
-            logger.info("Quick exported \(document.displayName) to \(destination.path)")
-        } catch let error as ExportError {
-            exportError = error
-        } catch {
-            exportError = .writeFailed(destination.path)
+        for format in selectedFormats.sorted(by: { $0.rawValue < $1.rawValue }) {
+            let filename = exportService.suggestedFilename(for: document, format: format)
+            let destination = folder.appendingPathComponent(filename)
+            
+            do {
+                try exportService.exportDocument(document, to: destination, configuration: configuration(for: format))
+                logger.info("Quick exported \(document.displayName) as \(format.displayName) to \(destination.path)")
+            } catch let error as ExportError {
+                exportError = error
+            } catch {
+                exportError = .writeFailed(destination.path)
+            }
         }
         
         isExporting = false
@@ -278,8 +372,13 @@ final class ExportViewModel {
     func previewContent(for document: Document, maxLength: Int = 2000) -> String? {
         guard let result = document.result else { return nil }
         
+        // Use the first selected format for preview
+        guard let firstFormat = selectedFormats.first else {
+            return result.fullMarkdown
+        }
+        
         do {
-            let content = try exportService.generateContent(for: document, configuration: configuration)
+            let content = try exportService.generateContent(for: document, configuration: configuration(for: firstFormat))
             if content.count > maxLength {
                 let truncated = String(content.prefix(maxLength))
                 return truncated + "\n\n... (truncated)"
@@ -303,7 +402,7 @@ final class ExportViewModel {
     /// Apply default configuration
     func applyDefaults() {
         let defaults = ExportConfiguration.default
-        selectedFormat = defaults.format
+        selectedFormats = [defaults.format]
         includeMetadata = defaults.includeMetadata
         includeCost = defaults.includeCost
         includeProcessingTime = defaults.includeProcessingTime

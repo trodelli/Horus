@@ -5,6 +5,31 @@ All notable changes to Horus will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-01-09
+
+### Added
+
+- **Multiple Format Export** — Export documents to multiple formats simultaneously (Markdown, JSON, TXT)
+- **Checkbox-Based Format Selection** — Intuitive checkbox interface for selecting one or more export formats
+- **Smart Export Behavior** — Single format uses traditional Save dialog; multiple formats use folder picker
+- **Batch Multi-Format Export** — Export entire document libraries to multiple formats at once
+
+### Changed
+
+- **Export Window Height** — Increased from 420px to 540px for better visibility
+- **Export Window (Batch)** — Increased from 450px to 540px
+- **Export Button Logic** — Now disabled when no formats are selected
+- **Format Selection UI** — Changed from radio buttons (single selection) to checkboxes (multiple selection)
+
+### Improved
+
+- **Export UX** — All export options visible without scrolling
+- **Export Progress** — Accurate progress tracking across multiple formats (documents × formats)
+- **File Naming** — Consistent naming for multi-format exports (e.g., `document.md`, `document.json`, `document.txt`)
+- **Visual Feedback** — Clear indication of selected formats with checkbox states
+
+---
+
 ## [2.0.0] - 2026-01-07
 
 ### Added
@@ -82,5 +107,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 2.1.0 | 2026-01-09 | Multiple format export, improved export UX |
 | 2.0.0 | 2026-01-07 | Page navigation, improved progress UX, About window |
 | 1.0.0 | 2026-01-06 | Initial release |

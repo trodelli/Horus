@@ -63,7 +63,7 @@ struct ExportSheetView: View {
             // Footer with buttons
             footer
         }
-        .frame(width: 480, height: showPreview ? 600 : 420)
+        .frame(width: 480, height: showPreview ? 600 : 540)
     }
     
     // MARK: - Header
@@ -113,13 +113,21 @@ struct ExportSheetView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
             
+            Text("Select one or more formats to export")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+            
             VStack(spacing: 8) {
                 ForEach(ExportFormat.allCases) { format in
-                    FormatOptionRow(
+                    FormatCheckboxRow(
                         format: format,
-                        isSelected: viewModel.selectedFormat == format
+                        isSelected: viewModel.selectedFormats.contains(format)
                     ) {
-                        viewModel.selectedFormat = format
+                        if viewModel.selectedFormats.contains(format) {
+                            viewModel.selectedFormats.remove(format)
+                        } else {
+                            viewModel.selectedFormats.insert(format)
+                        }
                     }
                 }
             }
@@ -141,12 +149,12 @@ struct ExportSheetView: View {
                 Toggle("Include processing time", isOn: $viewModel.includeProcessingTime)
                     .disabled(!viewModel.includeMetadata)
                 
-                if viewModel.selectedFormat == .markdown {
+                if viewModel.selectedFormats.contains(.markdown) {
                     Toggle("Include YAML front matter", isOn: $viewModel.includeFrontMatter)
                         .disabled(!viewModel.includeMetadata)
                 }
                 
-                if viewModel.selectedFormat == .json {
+                if viewModel.selectedFormats.contains(.json) {
                     Toggle("Pretty-print JSON", isOn: $viewModel.prettyPrintJSON)
                 }
             }
@@ -205,7 +213,7 @@ struct ExportSheetView: View {
             }
             .keyboardShortcut(.defaultAction)
             .buttonStyle(.borderedProminent)
-            .disabled(viewModel.isExporting)
+            .disabled(viewModel.isExporting || !viewModel.hasSelectedFormats)
         }
         .padding(16)
         .background(Color(.windowBackgroundColor))
@@ -220,9 +228,9 @@ struct ExportSheetView: View {
     }
 }
 
-// MARK: - Format Option Row
+// MARK: - Format Checkbox Row
 
-struct FormatOptionRow: View {
+struct FormatCheckboxRow: View {
     let format: ExportFormat
     let isSelected: Bool
     let onSelect: () -> Void
@@ -230,8 +238,9 @@ struct FormatOptionRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
-                Image(systemName: isSelected ? "circle.inset.filled" : "circle")
+                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
                     .foregroundStyle(isSelected ? .blue : .secondary)
+                    .font(.title3)
                 
                 Image(systemName: format.symbolName)
                     .frame(width: 20)
