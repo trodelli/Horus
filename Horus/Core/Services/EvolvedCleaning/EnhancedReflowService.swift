@@ -7,6 +7,11 @@
 //  Purpose: AI-powered paragraph reflow with word-count validation.
 //  Removes artificial line breaks while preserving content exactly.
 //
+//  Updated on 07/02/2026 - Phase 4 Data Integrity: Poetry Block Detection.
+//      Added isPoetryBlock() to detect and preserve poetry stanzas during
+//      heuristic reflow. Short lines with stanza structure are passed through
+//      without joining.
+//
 
 import Foundation
 import Combine
@@ -259,6 +264,15 @@ final class EnhancedReflowService: ObservableObject {
         let paragraphs = text.components(separatedBy: "\n\n")
         
         for (index, paragraph) in paragraphs.enumerated() {
+            // Phase 4 Fix: Detect and preserve poetry blocks
+            if isPoetryBlock(paragraph) {
+                reflowed += paragraph
+                if index < paragraphs.count - 1 {
+                    reflowed += "\n\n"
+                }
+                continue
+            }
+            
             let lines = paragraph.components(separatedBy: "\n")
             var joined = ""
             
@@ -428,5 +442,48 @@ final class EnhancedReflowService: ObservableObject {
         let paragraphs = text.components(separatedBy: "\n\n")
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         return paragraphs.count
+    }
+    
+    // MARK: - Poetry Detection (Phase 4 Fix)
+    
+    /// Detect if a paragraph block is likely poetry.
+    ///
+    /// **Phase 4 Fix (2026-02-07):** Prevents poetry stanzas from being reflow-joined
+    /// into prose. Heuristics:
+    /// - Average line length < 12 words (poetry lines are short)
+    /// - Most lines don't end with sentence-terminal punctuation
+    /// - At least 3 lines in the block (single short lines are not poetry)
+    /// - No lines that look like headings (starting with #)
+    private func isPoetryBlock(_ text: String) -> Bool {
+        let lines = text.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        
+        // Need at least 3 lines to consider it poetry
+        guard lines.count >= 3 else { return false }
+        
+        // Skip if any line looks like a heading
+        if lines.contains(where: { $0.hasPrefix("#") }) { return false }
+        
+        // Check average word count per line
+        let wordCounts = lines.map { line in
+            line.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
+        }
+        let avgWords = Double(wordCounts.reduce(0, +)) / Double(lines.count)
+        
+        // Poetry typically has short lines
+        guard avgWords < 12 else { return false }
+        
+        // Check how many lines end WITHOUT sentence-terminal punctuation
+        let sentenceEnders: Set<Character> = [".", "!", "?"]
+        let nonTerminalCount = lines.filter { line in
+            guard let lastChar = line.last else { return true }
+            return !sentenceEnders.contains(lastChar)
+        }.count
+        
+        let nonTerminalRatio = Double(nonTerminalCount) / Double(lines.count)
+        
+        // If most lines (>60%) don't end with sentence punctuation, likely poetry
+        return nonTerminalRatio > 0.6
     }
 }

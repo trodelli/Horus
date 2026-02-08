@@ -4,6 +4,7 @@
 //
 //  Created on 06/01/2026.
 //  Updated on 25/01/2026 - Library-centric workflow with explicit membership.
+//  Updated on 06/02/2026 - F4: Added cached sessionStats with targeted invalidation.
 //
 
 import Foundation
@@ -43,6 +44,9 @@ final class AppState {
     var preferences: UserPreferences
     private(set) var hasAPIKey: Bool = false
     private(set) var hasClaudeAPIKey: Bool = false
+    
+    /// Cached session statistics — recalculated when document data changes
+    private(set) var sessionStats: SessionStats = SessionStats(processedCount: 0, ocrCount: 0, cleanCount: 0, totalCost: 0)
     
     // MARK: - Navigation State
     
@@ -216,6 +220,9 @@ final class AppState {
         self.hasAPIKey = keychainService.hasAPIKey
         self.hasClaudeAPIKey = keychainService.hasClaudeAPIKey
         self.showOnboarding = !hasAPIKey
+        
+        // Calculate initial session stats (empty session)
+        self.sessionStats = SessionStats.calculate(from: session.documents)
         
         logger.info("AppState initialized, hasAPIKey: \(self.hasAPIKey), hasClaudeAPIKey: \(self.hasClaudeAPIKey)")
     }
@@ -402,7 +409,18 @@ final class AppState {
     
     @discardableResult
     func importDocuments(from urls: [URL]) async -> Int {
-        await documentQueueViewModel.importDocuments(from: urls, into: session)
+        let count = await documentQueueViewModel.importDocuments(from: urls, into: session)
+        recalculateSessionStats()
+        return count
+    }
+    
+    // MARK: - Session Statistics
+    
+    /// Recalculate session statistics from current document state.
+    /// Call this whenever document properties that affect stats change:
+    /// processed status, OCR result, cleaned content, cost, or document count.
+    func recalculateSessionStats() {
+        sessionStats = SessionStats.calculate(from: session.documents)
     }
     
     // MARK: - Delete Actions (NEW)
@@ -438,6 +456,7 @@ final class AppState {
         
         session.removeDocument(id: document.id)
         documentToDelete = nil
+        recalculateSessionStats()
         logger.info("Deleted document: \(document.displayName)")
     }
     
@@ -464,6 +483,7 @@ final class AppState {
         }
         
         session.removeDocuments(ids: libraryIds)
+        recalculateSessionStats()
         logger.info("Cleared library (\(libraryIds.count) documents removed)")
     }
     
@@ -485,6 +505,7 @@ final class AppState {
         // Remove only non-completed documents
         let inputIds = Set(inputDocuments.map(\.id))
         session.removeDocuments(ids: inputIds)
+        recalculateSessionStats()
         
         logger.info("Cleared input")
     }
@@ -597,6 +618,7 @@ final class AppState {
         
         // Update the document in the session
         session.updateDocument(resetDocument)
+        recalculateSessionStats()
         
         // Clear selection if this was selected in Clean tab
         if selectedCleanDocumentId == document.id {
@@ -800,6 +822,7 @@ final class AppState {
     ///   - documentId: The ID of the document to update
     private func persistCleanedContent(_ cleanedContent: CleanedContent, for documentId: UUID) {
         session.updateDocumentCleanedContent(id: documentId, cleanedContent: cleanedContent)
+        recalculateSessionStats()
         logger.info("Persisted cleaned content in session for document: \(documentId)")
     }
     
@@ -1122,6 +1145,7 @@ final class AppState {
         selectedCleanDocumentId = nil
         cleaningViewModel = nil
         selectedTab = .input
+        recalculateSessionStats()
         logger.info("Started new session")
     }
 }

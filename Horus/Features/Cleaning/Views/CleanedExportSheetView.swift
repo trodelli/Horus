@@ -416,21 +416,41 @@ struct CleanedExportSheetView: View {
         report += formatReportRow("Duration", content.formattedDuration)
         report += "\n"
         
+        // Pipeline Confidence
+        if let confidence = content.overallConfidence {
+            report += "PIPELINE CONFIDENCE\n"
+            report += "\(subDivider)\n"
+            
+            let confidencePercentage = Int(confidence * 100)
+            let rating = confidenceRatingForReport(confidence)
+            let assessment = confidenceAssessmentForReport(rating)
+            
+            report += formatReportRow("Score", "\(confidencePercentage)%")
+            report += formatReportRow("Level", rating)
+            report += formatReportRow("Assessment", assessment)
+            report += "\n"
+        }
+        
         // Phase Execution
         if let phases = content.phaseResults, !phases.isEmpty {
             report += "PHASE EXECUTION\n"
             report += "\(subDivider)\n"
+            report += "Confidence scores indicate the pipeline's certainty that each\n"
+            report += "phase was executed correctly and content was processed accurately.\n\n"
+            
             for phase in phases {
-                let stepNum = String(format: "%2d", phase.stepNumber)
-                let status = phase.completed ? "✓" : "✗"
+                let status = phase.completed ? "✓" : "—"
                 let confidenceStr: String
                 if let conf = phase.confidence {
                     confidenceStr = String(format: "%3d%%", Int(conf * 100))
+                } else if phase.completed {
+                    confidenceStr = "—"
                 } else {
-                    confidenceStr = "  —"
+                    confidenceStr = "N/A"
                 }
                 let methodPad = phase.method.padding(toLength: 6, withPad: " ", startingAt: 0)
-                report += " \(stepNum). \(phase.name.padding(toLength: 25, withPad: " ", startingAt: 0)) \(status) \(methodPad) \(confidenceStr)\n"
+                let namePad = phase.name.padding(toLength: 25, withPad: " ", startingAt: 0)
+                report += "  \(namePad) \(status) \(methodPad) \(confidenceStr)\n"
             }
             report += "\n"
         }
@@ -438,9 +458,21 @@ struct CleanedExportSheetView: View {
         // Executed Steps
         report += "EXECUTED STEPS\n"
         report += "\(subDivider)\n"
-        for step in content.executedSteps {
-            let stepNum = String(format: "%2d", step.stepNumber)
-            report += " \(stepNum). \(step.displayName)\n"
+        
+        let allSteps = CleaningStep.allCases
+        for step in allSteps {
+            let stepNumber = String(format: "%2d", step.rawValue)
+            let statusLabel: String
+            
+            if content.configuration.isStepEnabled(step) {
+                statusLabel = "Success"
+            } else {
+                statusLabel = "Skipped"
+            }
+            
+            let namePad = step.displayName.padding(toLength: 28, withPad: " ", startingAt: 0)
+            let statusPad = statusLabel.padding(toLength: 8, withPad: " ", startingAt: 0)
+            report += "  Step \(stepNumber): \(namePad) \(statusPad)\n"
         }
         report += "\n"
         
@@ -483,6 +515,35 @@ struct CleanedExportSheetView: View {
         report += "-->\n"
         
         return report
+    }
+    
+    /// Get confidence rating string
+    private func confidenceRatingForReport(_ confidence: Double) -> String {
+        switch confidence {
+        case 0.9...: return "Very High"
+        case 0.75..<0.9: return "High"
+        case 0.6..<0.75: return "Moderate"
+        case 0.4..<0.6: return "Low"
+        default: return "Very Low"
+        }
+    }
+    
+    /// Get confidence assessment text
+    private func confidenceAssessmentForReport(_ rating: String) -> String {
+        switch rating {
+        case "Very High":
+            return "Excellent quality. All phases completed successfully."
+        case "High":
+            return "Good quality. Most phases completed with high confidence."
+        case "Moderate":
+            return "Acceptable quality. Review recommended."
+        case "Low":
+            return "Below expectations. Manual review needed."
+        case "Very Low":
+            return "Quality concerns. Careful review required."
+        default:
+            return "Unknown quality level."
+        }
     }
     
     /// Format a metric row with consistent alignment

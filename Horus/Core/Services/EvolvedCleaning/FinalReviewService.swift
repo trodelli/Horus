@@ -7,6 +7,11 @@
 //  Purpose: AI-powered final quality review of cleaned documents.
 //  Provides quality scores, issue detection, and recommendations.
 //
+//  Updated on 07/02/2026 - Phase 5 Data Integrity: Final Review Calibration.
+//      Adjusted heuristic thresholds by content type — academic documents with heavy
+//      apparatus (footnotes, citations, bibliography) expect higher word-count reduction.
+//      Enhanced AI prompt with apparatus-awareness guidance.
+//
 
 import Foundation
 import Combine
@@ -197,7 +202,8 @@ final class FinalReviewService: ObservableObject {
         // Heuristic fallback
         return reviewHeuristically(
             originalText: originalText,
-            cleanedText: cleanedText
+            cleanedText: cleanedText,
+            contentType: contentType
         )
     }
     
@@ -259,7 +265,8 @@ final class FinalReviewService: ObservableObject {
     
     private func reviewHeuristically(
         originalText: String,
-        cleanedText: String
+        cleanedText: String,
+        contentType: ContentType
     ) -> FinalReviewResult {
         
         let originalWords = countWords(in: originalText)
@@ -271,7 +278,15 @@ final class FinalReviewService: ObservableObject {
         // Check word count ratio
         let ratio = Double(cleanedWords) / Double(max(originalWords, 1))
         
-        if ratio < 0.5 {
+        // Phase 5 Fix: Content-type-aware thresholds.
+        // Academic/technical documents with heavy apparatus (footnotes, citations,
+        // bibliography, index) can legitimately lose 30-50%+ of word count.
+        let isApparatusHeavy = contentType == .academic || contentType == .scientificTechnical ||
+                               contentType == .legal || contentType == .religiousSacred
+        let criticalThreshold: Double = isApparatusHeavy ? 0.35 : 0.5
+        let warningThreshold: Double = isApparatusHeavy ? 0.6 : 0.8
+        
+        if ratio < criticalThreshold {
             issues.append(ReviewIssue(
                 severity: .critical,
                 category: .contentLoss,
@@ -279,7 +294,7 @@ final class FinalReviewService: ObservableObject {
                 location: nil
             ))
             qualityScore -= 0.3
-        } else if ratio < 0.8 {
+        } else if ratio < warningThreshold {
             issues.append(ReviewIssue(
                 severity: .warning,
                 category: .contentLoss,
@@ -342,6 +357,12 @@ final class FinalReviewService: ObservableObject {
         2. Formatting quality - are paragraphs properly structured?
         3. Boundary accuracy - was front/back matter handled correctly?
         4. Overall readability - is the cleaned text well-formatted?
+        
+        IMPORTANT: Academic, technical, legal, and reference documents often have extensive
+        apparatus (footnotes, endnotes, citations, bibliography, index) that is intentionally
+        removed during cleaning. For these content types, significant word-count reduction
+        (30-50%+) is expected and should NOT be penalized. Focus on whether the core body
+        text is preserved, not on total word-count ratio.
         
         Respond with JSON:
         {

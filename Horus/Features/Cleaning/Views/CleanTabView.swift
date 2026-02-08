@@ -523,14 +523,9 @@ struct CleanTabView: View {
                         // Bookend phase labels when no step is active
                         switch viewModel.currentPhase {
                         case .reconnaissance:
-                            HStack(spacing: 6) {
-                                Image(systemName: "brain")
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(.purple)
-                                Text("Content Analysis")
-                                    .font(.system(size: 13, weight: .medium))
-                            }
-                            Text("Analyzing document structure...")
+                            Text("Cleaning System Initializing")
+                                .font(.system(size: 13, weight: .medium))
+                            Text("Preparing document for processing...")
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
                             

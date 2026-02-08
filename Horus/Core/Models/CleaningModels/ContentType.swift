@@ -69,7 +69,7 @@ enum ContentType: String, Codable, CaseIterable, Sendable, Identifiable {
     var symbolName: String {
         switch self {
         case .autoDetect:
-            return "brain"
+            return "wand.and.sparkles"
         case .proseNonFiction:
             return "book.closed"
         case .proseFiction:

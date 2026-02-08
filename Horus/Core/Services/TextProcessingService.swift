@@ -4,7 +4,24 @@
 //
 //  Created by Claude on 2026-01-22.
 //
-// 
+//  Updated on 07/02/2026 - Phase 2 Data Integrity: Surgical Superscript Removal.
+//      Refined superscript patterns in commonCitationPatterns and
+//      commonFootnoteMarkerPatterns to require multi-letter word context, preventing
+//      false matches on mathematical exponents like x², πd⁴, n³.
+//  Updated on 07/02/2026 - Phase 3 Data Integrity: Citation Pattern Safety.
+//      Added decimal/DOI shielding in removeCitations() and refined IEEE pattern with
+//      boundary-aware lookahead/lookbehind.
+//  Updated on 07/02/2026 - Phase 4 Data Integrity: Enhanced Citation Pattern Coverage.
+//      Added patterns for: nested "as cited in" citations, complex multi-citations with
+//      introductory phrases (see/cf.), Harvard-style bare page numbers, explicit diacritic
+//      support (García, Müller), and expanded orphaned artifact cleanup.
+//  Updated on 08/02/2026 - Phase 5 Data Integrity: Unicode Citation Pattern Fix.
+//      Fixed Unicode character matching in citation patterns by replacing \p{L} property
+//      escapes with explicit character ranges (À-ÖØ-öø-ÿĀ-žḀ-ỿ) that work reliably in
+//      NSRegularExpression character classes. Added patterns for: nested "as cited in"
+//      citations, multi-citations with mixed introductory prefixes (see X; cf. Y),
+//      Harvard-style bare page numbers. Enhanced orphan artifact cleanup with 6 new
+//      patterns for partial citation remnants.
 //
 
 import Foundation
@@ -21,6 +38,9 @@ protocol TextProcessingServiceProtocol: Sendable {
     
     /// Remove content between line boundaries (inclusive)
     func removeSection(content: String, startLine: Int, endLine: Int) -> String
+    
+    /// Remove content between line boundaries, preserving exclusion zones (Phase B)
+    func removeSectionWithExclusions(content: String, startLine: Int, endLine: Int, exclusions: [ExclusionZone]) -> String
     
     /// Remove lines that exactly match any of the given strings
     func removeExactLines(content: String, linesToRemove: [String]) -> String
@@ -114,6 +134,9 @@ protocol TextProcessingServiceProtocol: Sendable {
     /// Remove multiple non-contiguous sections from content
     func removeMultipleSections(content: String, sections: [(startLine: Int, endLine: Int)]) -> String
     
+    /// Remove multiple sections with detailed result reporting
+    func removeMultipleSectionsWithReport(content: String, sections: [(startLine: Int, endLine: Int)]) -> TextProcessingService.SectionRemovalResult
+    
     /// Remove patterns within text (not whole lines) - returns content and change count
     func removePatternsInText(content: String, patterns: [String]) -> (content: String, changeCount: Int)
     
@@ -122,6 +145,12 @@ protocol TextProcessingServiceProtocol: Sendable {
     
     /// Remove inline footnote/endnote markers from content
     func removeFootnoteMarkers(content: String, markerPattern: String?) -> (content: String, changeCount: Int)
+    
+    /// Clean orphaned citation artifacts left after partial citation removal (Fix B1)
+    func cleanOrphanedCitationArtifacts(_ content: String) -> String
+    
+    /// Remove decorative em-dashes while preserving grammatical ones (Fix B2)
+    func removeDecorativeEmDashes(_ content: String) -> String
     
     // MARK: - Phase 3: Heuristic Detection
     
@@ -282,6 +311,72 @@ final class TextProcessingService: TextProcessingServiceProtocol, @unchecked Sen
         return result.joined(separator: "\n")
     }
     
+    /// Remove content between line boundaries, preserving exclusion zones.
+    ///
+    /// **Phase B Fix:** When removing a large section (e.g., front matter), any sub-sections
+    /// that the user has disabled (e.g., TOC) are preserved by marking them as exclusion zones.
+    ///
+    /// - Parameters:
+    ///   - content: The full document content
+    ///   - startLine: First line to remove (0-indexed, inclusive)
+    ///   - endLine: Last line to remove (0-indexed, inclusive)
+    ///   - exclusions: Ranges within [startLine, endLine] to preserve
+    /// - Returns: Content with the section removed but exclusion zones preserved
+    func removeSectionWithExclusions(content: String, startLine: Int, endLine: Int, exclusions: [ExclusionZone]) -> String {
+        // If no exclusions, delegate to standard removeSection
+        guard !exclusions.isEmpty else {
+            return removeSection(content: content, startLine: startLine, endLine: endLine)
+        }
+        
+        let lines = content.components(separatedBy: .newlines)
+        
+        // Validate boundaries
+        guard startLine >= 0, startLine < lines.count else {
+            logger.warning("Invalid startLine: \(startLine) for removeSectionWithExclusions")
+            return content
+        }
+        
+        let actualEndLine = min(endLine, lines.count - 1)
+        guard startLine <= actualEndLine else {
+            logger.warning("startLine \(startLine) > endLine \(actualEndLine) for removeSectionWithExclusions")
+            return content
+        }
+        
+        // Sort exclusions by start line and clamp to removal range
+        let sortedExclusions = exclusions
+            .map { ExclusionZone(
+                startLine: max($0.startLine, startLine),
+                endLine: min($0.endLine, actualEndLine),
+                reason: $0.reason
+            )}
+            .filter { $0.startLine <= $0.endLine }
+            .sorted { $0.startLine < $1.startLine }
+        
+        // Build result: lines before removal + preserved exclusions + lines after removal
+        var result: [String] = []
+        
+        // Lines before the removal zone
+        if startLine > 0 {
+            result.append(contentsOf: lines[0..<startLine])
+        }
+        
+        // Within the removal zone, keep only excluded ranges
+        for exclusion in sortedExclusions {
+            result.append(contentsOf: lines[exclusion.startLine...exclusion.endLine])
+            logger.debug("Phase B: Preserved lines \(exclusion.startLine)-\(exclusion.endLine) (\(exclusion.reason))")
+        }
+        
+        // Lines after the removal zone
+        if actualEndLine + 1 < lines.count {
+            result.append(contentsOf: lines[(actualEndLine + 1)...])
+        }
+        
+        let totalRemoved = (actualEndLine - startLine + 1) - sortedExclusions.reduce(0) { $0 + ($1.endLine - $1.startLine + 1) }
+        logger.debug("Removed section with exclusions: lines \(startLine)-\(actualEndLine), preserved \(sortedExclusions.count) zone(s), net \(totalRemoved) lines removed")
+        
+        return result.joined(separator: "\n")
+    }
+    
     /// Remove lines that exactly match any of the given strings
     func removeExactLines(content: String, linesToRemove: [String]) -> String {
         guard !linesToRemove.isEmpty else { return content }
@@ -333,6 +428,9 @@ final class TextProcessingService: TextProcessingServiceProtocol, @unchecked Sen
         // Step 4: Normalize dashes (preserve em-dash semantics)
         result = normalizeDashes(result)
         
+        // Step 4b (Fix B2): Remove decorative em-dashes while preserving grammatical ones
+        result = removeDecorativeEmDashes(result)
+        
         // Step 5: Normalize quotation marks
         result = normalizeQuotationMarks(result)
         
@@ -351,8 +449,10 @@ final class TextProcessingService: TextProcessingServiceProtocol, @unchecked Sen
         result = result.replacingOccurrences(of: "[", with: "(")
         result = result.replacingOccurrences(of: "]", with: ")")
         
-        // Step 7: Remove other specified characters (excluding brackets since we've handled them)
-        let filteredChars = characters.filter { $0 != "[" && $0 != "]" }
+        // Step 7: Remove other specified characters (excluding brackets since we've handled them,
+        // and em-dashes which are handled contextually by normalizeDashes/removeDecorativeEmDashes)
+        // Phase 4 Fix: Em-dash (\u{2014}) must never be generically stripped.
+        let filteredChars = characters.filter { $0 != "[" && $0 != "]" && $0 != "\u{2014}" }
         for char in filteredChars {
             // Escape special regex characters if needed
             let escaped = NSRegularExpression.escapedPattern(for: char)
@@ -1479,7 +1579,8 @@ final class TextProcessingService: TextProcessingServiceProtocol, @unchecked Sen
     // MARK: - Phase 4 Fix: Heuristic Chapter Detection
     
     /// Detected chapter heading info
-    private struct DetectedHeading {
+    /// Phase F Fix: Made accessible (was private) alongside detectChapterHeadingsHeuristic.
+    struct DetectedHeading {
         let lineIndex: Int
         let title: String
         let headingLine: String
@@ -1496,7 +1597,9 @@ final class TextProcessingService: TextProcessingServiceProtocol, @unchecked Sen
     ///
     /// - Parameter lines: Document lines to analyze
     /// - Returns: Array of detected chapter headings with line indices
-    private func detectChapterHeadingsHeuristic(lines: [String]) -> [DetectedHeading] {
+    /// Phase F Fix: Made accessible (was private) so CleaningService can use it as
+    /// a fallback when AI-based chapter detection fails or returns empty results.
+    func detectChapterHeadingsHeuristic(lines: [String]) -> [DetectedHeading] {
         var chapters: [DetectedHeading] = []
         
         // Chapter heading patterns (Markdown format)
@@ -1861,6 +1964,95 @@ final class TextProcessingService: TextProcessingServiceProtocol, @unchecked Sen
         return lines.joined(separator: "\n")
     }
     
+    /// Result of a multi-section removal operation.
+    struct SectionRemovalResult {
+        /// The content after removal
+        let content: String
+        /// Number of lines actually removed
+        let linesRemoved: Int
+        /// Number of sections successfully removed
+        let sectionsRemoved: Int
+        /// Number of sections rejected due to invalid boundaries
+        let sectionsRejected: Int
+        /// Details of rejected sections for logging
+        let rejectedDetails: [(startLine: Int, endLine: Int, reason: String)]
+    }
+    
+    /// Remove multiple sections with detailed result reporting.
+    ///
+    /// Returns a `SectionRemovalResult` that includes information about
+    /// rejected sections, allowing callers to trigger fallback detection
+    /// when boundaries are invalid.
+    func removeMultipleSectionsWithReport(
+        content: String,
+        sections: [(startLine: Int, endLine: Int)]
+    ) -> SectionRemovalResult {
+        guard !sections.isEmpty else {
+            return SectionRemovalResult(
+                content: content, linesRemoved: 0,
+                sectionsRemoved: 0, sectionsRejected: 0,
+                rejectedDetails: []
+            )
+        }
+        
+        var lines = content.components(separatedBy: .newlines)
+        var totalRemoved = 0
+        var removedCount = 0
+        var rejectedCount = 0
+        var rejectedDetails: [(startLine: Int, endLine: Int, reason: String)] = []
+        
+        let sortedSections = sections.sorted { $0.startLine > $1.startLine }
+        
+        for section in sortedSections {
+            // Validate boundaries
+            if section.startLine < 0 {
+                let reason = "Start line \(section.startLine) is negative"
+                logger.warning("Rejected section: \(reason)")
+                rejectedDetails.append((section.startLine, section.endLine, reason))
+                rejectedCount += 1
+                continue
+            }
+            if section.startLine >= lines.count {
+                let reason = "Start line \(section.startLine) exceeds document length (\(lines.count) lines)"
+                logger.warning("Rejected section: \(reason)")
+                rejectedDetails.append((section.startLine, section.endLine, reason))
+                rejectedCount += 1
+                continue
+            }
+            if section.endLine < section.startLine {
+                let reason = "End line \(section.endLine) is before start line \(section.startLine)"
+                logger.warning("Rejected section: \(reason)")
+                rejectedDetails.append((section.startLine, section.endLine, reason))
+                rejectedCount += 1
+                continue
+            }
+            
+            let actualEnd = min(section.endLine, lines.count - 1)
+            let removeCount = actualEnd - section.startLine + 1
+            
+            lines.removeSubrange(section.startLine...actualEnd)
+            totalRemoved += removeCount
+            removedCount += 1
+            
+            logger.debug("Removed section lines \(section.startLine)-\(actualEnd) (\(removeCount) lines)")
+        }
+        
+        if totalRemoved > 0 {
+            logger.info("Removed \(totalRemoved) lines across \(removedCount) sections")
+        }
+        if rejectedCount > 0 {
+            logger.warning("Rejected \(rejectedCount) section(s) with invalid boundaries")
+        }
+        
+        return SectionRemovalResult(
+            content: lines.joined(separator: "\n"),
+            linesRemoved: totalRemoved,
+            sectionsRemoved: removedCount,
+            sectionsRejected: rejectedCount,
+            rejectedDetails: rejectedDetails
+        )
+    }
+    
     /// Remove patterns within text (not whole lines)
     /// Unlike removeMatchingLines, this removes pattern matches from within text
     /// - Parameters:
@@ -1934,6 +2126,12 @@ final class TextProcessingService: TextProcessingServiceProtocol, @unchecked Sen
             var processedLine = line
             var lineChanges = 0
             
+            // Phase 3 Fix: Shield decimal values, section refs, and DOIs before pattern application.
+            // These can be falsely matched by citation patterns (e.g., "3.14" as year+page,
+            // "[3]" as IEEE citation when it's a table reference).
+            let (shieldedLine, decimalShields) = shieldDecimalsAndDOIs(processedLine)
+            processedLine = shieldedLine
+            
             // Use detected patterns if available
             if !patterns.isEmpty {
                 let (processed, changes) = removePatternsInText(content: processedLine, patterns: patterns)
@@ -1948,6 +2146,9 @@ final class TextProcessingService: TextProcessingServiceProtocol, @unchecked Sen
                 processedLine = processed
                 lineChanges += changes
             }
+            
+            // Phase 3 Fix: Restore shielded decimals/DOIs
+            processedLine = restoreDecimalsAndDOIs(processedLine, shields: decimalShields)
             
             processedLines.append(processedLine)
             totalChanges += lineChanges
@@ -1966,6 +2167,11 @@ final class TextProcessingService: TextProcessingServiceProtocol, @unchecked Sen
             with: "",
             options: .regularExpression
         )
+        
+        // Fix B1 (2026-02-07): Clean orphaned citation artifacts
+        let beforeArtifactCleanup = result
+        result = cleanOrphanedCitationArtifacts(result)
+        totalChanges += countChanges(original: beforeArtifactCleanup, modified: result)
         
         logger.info("Removed \(totalChanges) citations")
         return (result, totalChanges)
@@ -2032,48 +2238,171 @@ final class TextProcessingService: TextProcessingServiceProtocol, @unchecked Sen
         return false
     }
     
-    /// Common citation patterns for fallback detection
-    /// Phase 2 Fix (2026-01-29): Expanded patterns to handle:
-    /// - Unicode author names (Müller, Dubois, García)
-    /// - Introductory phrases (see, cf., e.g.)
-    /// - Multiple citations separated by semicolons
-    /// - Latin abbreviations inside parentheses
-    /// - Author-year without comma variant
+    // MARK: - Phase 3 Fix: Decimal/DOI/Section Reference Protection
+    
+    /// Shield decimal values, section references, and DOIs within a line before citation
+    /// pattern application. This prevents patterns from falsely matching numeric content.
+    ///
+    /// **Phase 3 Fix (2026-02-07):** Protects:
+    /// - Decimal numbers: `3.14`, `0.05`, `99.9`
+    /// - Section references: `Section 3.1`, `§ 2.3.1`
+    /// - DOIs: `10.1000/xyz123`
+    /// - Standalone numbers in brackets that look like table/figure refs: `[Figure 3]`
+    private func shieldDecimalsAndDOIs(_ line: String) -> (shieldedLine: String, shields: [(placeholder: String, original: String)]) {
+        var result = line
+        var shields: [(placeholder: String, original: String)] = []
+        
+        // Shield DOIs first (most specific)
+        let doiPattern = #"(?:doi:\s*)?10\.\d{4,}\/[^\s]+"#
+        if let doiRegex = try? NSRegularExpression(pattern: doiPattern, options: .caseInsensitive) {
+            let matches = doiRegex.matches(in: result, range: NSRange(result.startIndex..., in: result))
+            for match in matches.reversed() {
+                guard let range = Range(match.range, in: result) else { continue }
+                let original = String(result[range])
+                let placeholder = "⟦CIT_DOI_\(shields.count)⟧"
+                shields.append((placeholder, original))
+                result.replaceSubrange(range, with: placeholder)
+            }
+        }
+        
+        // Shield decimal numbers (digits.digits)
+        let decimalPattern = #"\b\d+\.\d+\b"#
+        if let decimalRegex = try? NSRegularExpression(pattern: decimalPattern) {
+            let matches = decimalRegex.matches(in: result, range: NSRange(result.startIndex..., in: result))
+            for match in matches.reversed() {
+                guard let range = Range(match.range, in: result) else { continue }
+                let original = String(result[range])
+                let placeholder = "⟦CIT_DEC_\(shields.count)⟧"
+                shields.append((placeholder, original))
+                result.replaceSubrange(range, with: placeholder)
+            }
+        }
+        
+        return (result, shields)
+    }
+    
+    /// Restore shielded decimal values and DOIs after citation pattern application.
+    ///
+    /// **Phase 3 Fix (2026-02-07):** Companion to `shieldDecimalsAndDOIs(_:)`.
+    private func restoreDecimalsAndDOIs(_ line: String, shields: [(placeholder: String, original: String)]) -> String {
+        guard !shields.isEmpty else { return line }
+        var result = line
+        // Restore in reverse order (shields were appended, so restore last-first)
+        for shield in shields {
+            result = result.replacingOccurrences(of: shield.placeholder, with: shield.original)
+        }
+        return result
+    }
+    
+    /// Common citation patterns for fallback detection.
+    ///
+    /// **Phase 5 Fix (2026-02-08):** Unicode character range update for diacritics.
+    /// Replaced `\p{L}` with explicit ranges `À-ÖØ-öø-ÿĀ-žḀ-ỿ` because NSRegularExpression
+    /// does not reliably expand Unicode property escapes inside character class brackets.
+    ///
+    /// **Character Range Coverage:**
+    /// - `A-Za-z` — Basic Latin (Smith, Jones)
+    /// - `À-ÖØ-öø-ÿ` — Latin-1 Supplement (Müller, García, Dubois, Lefèvre)
+    /// - `Ā-ž` — Latin Extended-A (Čapek, Şen, Dvořák)
+    /// - `Ḁ-ỿ` — Latin Extended Additional (complete coverage)
+    ///
+    /// **New Patterns Added:**
+    /// - Nested "as cited in" citations: `(Lefevre 1756, as cited in Dubois, 2019)`
+    /// - Multi-citation with mixed prefixes: `(see X, 2015; cf. Y, 2017)`
+    /// - Harvard bare page numbers: `(Smith 2020, 42)`
     private static let commonCitationPatterns: [String] = [
-        // APA style: (Author, Year) - Unicode-aware for international names
+        // ══════════════════════════════════════════════════════════════════════
+        // STANDARD CITATION PATTERNS (Unicode-safe)
+        // ══════════════════════════════════════════════════════════════════════
+        
+        // APA style: (Author, Year) with optional page
         // Matches: (Smith, 2020), (Müller, 2018), (García, 2019, p. 45)
-        #"\([A-Z][\p{L}\-']+(?:\s+(?:&|and)\s+[A-Z][\p{L}\-']+)*,\s*\d{4}(?:[a-z])?(?:,\s*pp?\.?\s*\d+(?:[–\-]\d+)?)?\)"#,
+        #"\([A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+(?:\s+(?:&|and)\s+[A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+)*,\s*\d{4}(?:[a-z])?(?:,\s*pp?\.?\s*\d+(?:[–\-]\d+)?)?\)"#,
         
-        // APA with et al.: (Author et al., Year) - Unicode-aware
-        #"\([A-Z][\p{L}\-']+\s+et\s+al\.?,\s*\d{4}(?:,\s*pp?\.?\s*\d+(?:[–\-]\d+)?)?\)"#,
+        // APA with et al.: (Author et al., Year)
+        #"\([A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+\s+et\s+al\.?,\s*\d{4}(?:,\s*pp?\.?\s*\d+(?:[–\-]\d+)?)?\)"#,
         
-        // APA without comma between author and year: (Smith 2020) or (Smith 2020, p. 42)
-        #"\([A-Z][\p{L}\-']+(?:\s+(?:&|and)\s+[A-Z][\p{L}\-']+)*\s+\d{4}(?:,\s*pp?\.?\s*\d+(?:[–\-]\d+)?)?\)"#,
+        // Harvard style without comma: (Smith 2020) or (Smith 2020, p. 42)
+        #"\([A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+(?:\s+(?:&|and)\s+[A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+)*\s+\d{4}(?:,\s*pp?\.?\s*\d+(?:[–\-]\d+)?)?\)"#,
         
-        // Citations with introductory phrases: (see Smith, 2020), (cf. Jones, 2019)
-        #"\((?:see|cf\.?|e\.?g\.?|i\.?e\.?)\s+[A-Z][\p{L}\-']+(?:,\s*|\s+)\d{4}(?:[a-z])?(?:,\s*pp?\.?\s*\d+(?:[–\-]\d+)?)?\)"#,
+        // ══════════════════════════════════════════════════════════════════════
+        // INTRODUCTORY PHRASE PATTERNS
+        // ══════════════════════════════════════════════════════════════════════
         
-        // Multiple citations: (Smith, 2020; Jones, 2019; Brown, 2018)
-        #"\([A-Z][\p{L}\-']+(?:,\s*|\s+)\d{4}(?:[a-z])?(?:;\s*[A-Z][\p{L}\-']+(?:,\s*|\s+)\d{4}(?:[a-z])?)+\)"#,
+        // Single intro phrase: (see Smith, 2020), (cf. Jones, 2019)
+        #"\((?:see|cf\.?|e\.?g\.?|i\.?e\.?)\s+[A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+(?:,\s*|\s+)\d{4}(?:[a-z])?(?:,\s*pp?\.?\s*\d+(?:[–\-]\d+)?)?\)"#,
         
-        // MLA style: (Author Page) or (Author and Author Page) - Unicode-aware
-        #"\([A-Z][\p{L}\-']+(?:\s+(?:&|and)\s+[A-Z][\p{L}\-']+)?\s+\d+(?:[–\-]\d+)?\)"#,
+        // **Phase 5 Fix:** Multi-citation with mixed intro phrases
+        // Matches: (see X, 2015; cf. Y, 2017), (e.g. X, 2020; see Y, 2021)
+        #"\((?:see|cf\.?|e\.?g\.?|i\.?e\.?)\s+[A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+(?:,\s*|\s+)\d{4}(?:[a-z])?(?:;\s*(?:(?:see|cf\.?|e\.?g\.?|i\.?e\.?)\s+)?[A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+(?:,\s*|\s+)\d{4}(?:[a-z])?)+\)"#,
         
-        // IEEE/Numeric style: [1] or [1, 2] or [1-3] or [1–3]
-        #"\[\d+(?:[–\-,]\s*\d+)*\]"#,
+        // ══════════════════════════════════════════════════════════════════════
+        // MULTIPLE CITATION PATTERNS
+        // ══════════════════════════════════════════════════════════════════════
         
-        // Superscript footnote markers (context-aware: only at word/sentence boundaries)
-        // R8.1: Avoid matching superscripts inside mathematical formulas like x² or πd⁴
-        #"(?<=[\p{L}\p{N}])[\u00B9\u00B2\u00B3\u2070-\u2079]+(?=[\s\.,;:\)\]\u201D]|$)"#,
+        // Standard multi-citation: (Smith, 2020; Jones, 2019; Brown, 2018)
+        #"\([A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+(?:,\s*|\s+)\d{4}(?:[a-z])?(?:;\s*[A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+(?:,\s*|\s+)\d{4}(?:[a-z])?)+\)"#,
         
-        // Latin abbreviations inside parentheses: (ibid., p. 45), (op. cit., p. 23)
+        // ══════════════════════════════════════════════════════════════════════
+        // NESTED/SECONDARY CITATION PATTERNS
+        // ══════════════════════════════════════════════════════════════════════
+        
+        // **Phase 5 Fix:** Nested "as cited in" citations
+        // Matches: (Lefevre 1756, as cited in Dubois, 2019)
+        #"\([A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+\s+\d{4},?\s+as\s+cited\s+in\s+[A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+,?\s*\d{4}(?:,\s*pp?\.?\s*\d+(?:[–\-]\d+)?)?\)"#,
+        
+        // ══════════════════════════════════════════════════════════════════════
+        // PAGE NUMBER VARIANTS
+        // ══════════════════════════════════════════════════════════════════════
+        
+        // **Phase 5 Fix:** Harvard with bare page number (no p./pp.)
+        // Matches: (Smith 2020, 42), (Jones 2019, 123-145)
+        #"\([A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+\s+\d{4},\s*\d{1,4}(?:[–\-]\d{1,4})?\)"#,
+        
+        // MLA style: (Author Page) - page only, no year
+        #"\([A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+(?:\s+(?:&|and)\s+[A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+)?\s+\d+(?:[–\-]\d+)?\)"#,
+        
+        // ══════════════════════════════════════════════════════════════════════
+        // NUMERIC/IEEE PATTERNS
+        // ══════════════════════════════════════════════════════════════════════
+        
+        // IEEE/Numeric style: [1] or [1, 2] or [1-3]
+        // Phase 3 Fix: Boundary-aware to avoid table refs
+        #"(?<=[\s(,;])\[\d+(?:[–\-,]\s*\d+)*\](?=[\s.,;:)\]]|$)"#,
+        
+        // ══════════════════════════════════════════════════════════════════════
+        // SUPERSCRIPT MARKERS
+        // ══════════════════════════════════════════════════════════════════════
+        
+        // Superscript footnote markers (context-aware)
+        // Phase 2 Fix: Requires multi-letter word context to avoid x², πd⁴
+        #"(?<=\p{L}\p{L})[\u00B9\u00B2\u00B3\u2070-\u2079]+(?=[\s\.,;:\)\]\u201D]|$)"#,
+        
+        // ══════════════════════════════════════════════════════════════════════
+        // LATIN ABBREVIATION PATTERNS
+        // ══════════════════════════════════════════════════════════════════════
+        
+        // Latin abbreviations in parentheses: (ibid., p. 45)
         #"\((?:ibid\.?|op\.?\s*cit\.?|loc\.?\s*cit\.?)(?:,?\s*pp?\.?\s*\d+(?:[–\-]\d+)?)?\)"#,
         
-        // Standalone Latin abbreviations (not in parentheses)
+        // Standalone Latin abbreviations
         #"\b(?:ibid\.?|op\.?\s*cit\.?|loc\.?\s*cit\.?)\b"#,
         
-        // R8.4: Author + Latin abbreviation: (Smith, op. cit., p. 23), (Jones, ibid.)
-        #"\([A-Z][\p{L}\-']+,\s*(?:ibid|op\.?\s*cit|loc\.?\s*cit)\.?(?:,?\s*pp?\.?\s*\d+(?:[–\-]\d+)?)?\)"#,
+        // Author + Latin abbreviation: (Smith, op. cit., p. 23)
+        #"\([A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+,\s*(?:ibid|op\.?\s*cit|loc\.?\s*cit)\.?(?:,?\s*pp?\.?\s*\d+(?:[–\-]\d+)?)?\)"#,
+        
+        // ══════════════════════════════════════════════════════════════════════
+        // Phase E Fix: Additional patterns for consistent citation removal
+        // ══════════════════════════════════════════════════════════════════════
+        
+        // Colon-separated page numbers: (Smith 2020: 45) or (Smith 2020: 45-67)
+        #"\([A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+\s+\d{4}:\s*\d+(?:[–\-]\d+)?\)"#,
+        
+        // Chapter + page citations: (Ch. 3, p. 12) or (Chapter 5, pp. 23-45)
+        #"\((?:Ch(?:apter)?\.?\s*\d+,\s*)?pp?\.?\s*\d+(?:[–\-]\d+)?\)"#,
+        
+        // Sentence-initial author-year: Smith (2020) argues...
+        #"[A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+\s+\(\d{4}[a-z]?\)"#,
     ]
     
     /// Remove inline footnote/endnote markers from content
@@ -2101,8 +2430,11 @@ final class TextProcessingService: TextProcessingServiceProtocol, @unchecked Sen
     /// Common footnote marker patterns
     private static let commonFootnoteMarkerPatterns: [String] = [
         // Superscript footnote markers (context-aware: only at word/sentence boundaries)
-        // R8.1: Avoid matching superscripts inside mathematical formulas like x² or πd⁴
-        #"(?<=[\p{L}\p{N}])[\u00B9\u00B2\u00B3\u2070-\u2079]+(?=[\s\.,;:\)\]\u201D]|$)"#,
+        // R8.1 + Phase 2 + Phase A Fix: Requires 3+ lowercase letters before superscript
+        // to avoid matching math exponents (x², πd⁴, n³, ab²). Real footnote markers
+        // follow prose words which are always 3+ letters (e.g., "word²", "results³").
+        // Uses explicit Unicode ranges instead of \p{L} for NSRegularExpression compatibility.
+        #"(?<=[a-zà-öø-ÿā-žḁ-ỿ]{3})[\u00B9\u00B2\u00B3\u2070-\u2079]+(?=[\s\.,;:\)\]\u201D]|$)"#,
         
         // Bracketed numbers: [1], [23]
         #"\[\d+\]"#,
@@ -2379,5 +2711,137 @@ extension TextProcessingService {
         
         logger.debug("Merged \(chunks.count) contiguous word-based chunks")
         return result
+    }
+    
+    // MARK: - Orphaned Citation Artifact Cleanup (Fix B1)
+    
+    /// Clean orphaned artifacts left behind after citation removal.
+    ///
+    /// When citations are only partially matched, they leave behind fragments.
+    ///
+    /// **Phase 5 Fix (2026-02-08):** Enhanced with additional artifact patterns:
+    /// - `(Smith, ., p. 23)` — author with stray period (year removed)
+    /// - `(Smith, p. 23)` — author with page only (year removed)
+    /// - `(as cited in )` — orphaned nested citation fragment
+    /// - `(Smith,)` — author with trailing comma only
+    /// - `; )` — orphaned semicolon before closing paren
+    func cleanOrphanedCitationArtifacts(_ content: String) -> String {
+        var result = content
+        
+        let artifactPatterns: [(pattern: String, replacement: String)] = [
+            // ════════════════════════════════════════════════════════════════
+            // EXISTING PATTERNS (preserved from Fix B1)
+            // ════════════════════════════════════════════════════════════════
+            
+            // Orphaned page references: (, p. 45) or (, pp. 45-67)
+            (#"\(\s*,?\s*pp?\.\s*\d+(?:[–\-]\d+)?\s*\)"#, ""),
+            
+            // Orphaned introductory phrases: (see ) or (cf. ) or (e.g. )
+            (#"\(\s*(?:see|cf\.?|e\.?g\.?|i\.?e\.?)\s*\)"#, ""),
+            
+            // Parentheses with only commas, semicolons, whitespace: (, , ) or ( ; )
+            (#"\(\s*[,;\s]+\s*\)"#, ""),
+            
+            // Orphaned "et al." fragments: (et al., ) or (et al.)
+            (#"\(\s*et\s+al\.?\s*,?\s*\)"#, ""),
+            
+            // Double commas from partial removal
+            (#",\s*,"#, ","),
+            
+            // Space before comma (common after removal)
+            (#"\s+,"#, ","),
+            
+            // ════════════════════════════════════════════════════════════════
+            // NEW PATTERNS (Phase 5 Fix)
+            // ════════════════════════════════════════════════════════════════
+            
+            // Author name with orphaned period and page: (Smith, ., p. 23)
+            // Occurs when year is removed but period remains
+            (#"\(\s*[A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+,\s*\.+,?\s*pp?\.?\s*\d+(?:[–\-]\d+)?\s*\)"#, ""),
+            
+            // Author name with just page reference: (Smith, p. 23)
+            // Occurs when year is fully removed
+            (#"\(\s*[A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+,\s*pp?\.?\s*\d+(?:[–\-]\d+)?\s*\)"#, ""),
+            
+            // Orphaned "as cited in" fragment: (as cited in ) or (as cited in Dubois, )
+            (#"\(\s*as\s+cited\s+in\s*[A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']*,?\s*\)"#, ""),
+            
+            // Author with trailing comma only: (Smith,) or (Müller, )
+            (#"\(\s*[A-Z][A-Za-zÀ-ÖØ-öø-ÿĀ-žḀ-ỿ\-']+,?\s*\)"#, ""),
+            
+            // Orphaned semicolon before closing paren: (Smith, 2020; )
+            (#";\s*\)"#, ")"),
+            
+            // Empty parentheses with various whitespace
+            (#"\(\s+\)"#, ""),
+        ]
+        
+        for (pattern, replacement) in artifactPatterns {
+            result = result.replacingOccurrences(
+                of: pattern,
+                with: replacement,
+                options: .regularExpression
+            )
+        }
+        
+        // Clean up multiple spaces that result from removals
+        result = result.replacingOccurrences(
+            of: "  +",
+            with: " ",
+            options: .regularExpression
+        )
+        
+        return result
+    }
+    
+    // MARK: - Context-Aware Em-Dash Handling (Fix B2)
+    
+    /// Remove decorative em-dashes while preserving grammatical ones.
+    ///
+    /// **Decorative em-dashes** (removed):
+    /// - Lines containing only em-dashes and whitespace (dividers)
+    /// - Page number markers: `— 45 —`
+    /// - Multiple consecutive em-dashes (decorative dividers)
+    ///
+    /// **Grammatical em-dashes** (preserved):
+    /// - Parenthetical: `word — word` or `word—word`
+    /// - Appositive: `The bourgeoisie — a powerful class — emerged`
+    ///
+    /// **Fix B2 (2026-02-07):** Added context-aware em-dash handling.
+    func removeDecorativeEmDashes(_ content: String) -> String {
+        let lines = content.components(separatedBy: .newlines)
+        var processedLines: [String] = []
+        
+        let emDash = "\u{2014}"
+        
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            
+            // Remove lines that are ONLY em-dashes and whitespace (decorative dividers)
+            if !trimmed.isEmpty && trimmed.allSatisfy({ $0 == Character(emDash) || $0.isWhitespace }) {
+                // Skip this line entirely — it's decorative
+                continue
+            }
+            
+            // Remove page number markers: — 42 — or — xvii —
+            let pageMarkerPattern = #"^\s*\u{2014}\s*[\divxlcdmIVXLCDM]+\s*\u{2014}\s*$"#
+            if let regex = try? NSRegularExpression(pattern: pageMarkerPattern),
+               regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil {
+                continue
+            }
+            
+            // Remove multiple consecutive em-dashes within a line (decorative: ——— or — — —)
+            var processedLine = line
+            let multiDashPattern = #"(\u{2014}\s*){2,}"#
+            processedLine = processedLine.replacingOccurrences(
+                of: multiDashPattern,
+                with: "",
+                options: .regularExpression
+            )
+            
+            processedLines.append(processedLine)
+        }
+        
+        return processedLines.joined(separator: "\n")
     }
 }

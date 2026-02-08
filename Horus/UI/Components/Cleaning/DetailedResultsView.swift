@@ -234,35 +234,36 @@ struct DetailedResultsView: View {
                 number: 3,
                 name: "Structural Removal",
                 method: "Hybrid",
-                executed: true,  // Always executed in current pipeline
-                confidence: result.phaseConfidences[3]  // nil = "Unknown"
+                // Phase is executed if we have confidence data for it
+                executed: result.phaseConfidences[3] != nil,
+                confidence: result.phaseConfidences[3]
             ),
             PhaseDisplayData(
                 number: 4,
                 name: "Content Cleaning",
                 method: "AI",
-                executed: true,
+                executed: result.phaseConfidences[4] != nil,
                 confidence: result.phaseConfidences[4]
             ),
             PhaseDisplayData(
                 number: 5,
                 name: "Scholarly Content",
                 method: "Hybrid",
-                executed: true,
+                executed: result.phaseConfidences[5] != nil,
                 confidence: result.phaseConfidences[5]
             ),
             PhaseDisplayData(
                 number: 6,
                 name: "Back Matter Removal",
                 method: "Hybrid",
-                executed: true,
+                executed: result.phaseConfidences[6] != nil,
                 confidence: result.phaseConfidences[6]
             ),
             PhaseDisplayData(
                 number: 7,
                 name: "Optimization & Assembly",
                 method: "AI",
-                executed: true,
+                executed: result.phaseConfidences[7] != nil,
                 confidence: result.phaseConfidences[7]
             ),
             PhaseDisplayData(

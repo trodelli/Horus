@@ -447,6 +447,123 @@ struct PipelinePhaseStepsGroup: View {
     }
 }
 
+// MARK: - Pipeline Steps Selector View
+
+/// Collapsible container for all pipeline steps, matching the expand/collapse pattern
+/// used by `ContentTypeSelectorView` and `PresetSelectorView`.
+/// Self-contained view with its own `@State` for smooth animation.
+struct PipelineStepsSelectorView: View {
+    @Bindable var viewModel: CleaningViewModel
+    
+    /// Binding to parent's sheet state for "What's New"
+    @Binding var showingWhatsNewSheet: Bool
+    /// Binding to parent's sheet state for "Learn about Cleaning"
+    @Binding var showingExplainerSheet: Bool
+    
+    @State private var isExpanded = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignConstants.Spacing.sm) {
+            // Collapsible header button
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: DesignConstants.Spacing.sm) {
+                    // Section icon
+                    Image(systemName: "gearshape.2")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.purple)
+                        .frame(width: 20)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Pipeline Steps")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.primary)
+                        
+                        Text("\(viewModel.enabledStepCount) of \(CleaningStep.totalSteps) steps enabled")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    
+                    Spacer()
+                    
+                    // Step count badge
+                    Text("\(viewModel.enabledStepCount)/\(CleaningStep.totalSteps)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(DesignConstants.CornerRadius.xs)
+                    
+                    // Expand/collapse chevron
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(DesignConstants.Spacing.sm)
+                .background(Color.purple.opacity(0.08))
+                .cornerRadius(DesignConstants.CornerRadius.md)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isProcessing)
+            
+            // Expanded content — uses height-clipping instead of conditional
+            // insertion so SwiftUI can smoothly animate the frame height,
+            // preventing the abrupt jump of sibling cards below.
+            VStack(spacing: DesignConstants.Spacing.xs) {
+                // All steps organized by PipelinePhase (V3 visual grouping)
+                VStack(spacing: 0) {
+                    ForEach(PipelinePhase.allCases) { phase in
+                        PipelinePhaseStepsGroup(phase: phase, viewModel: viewModel)
+                    }
+                }
+                
+                // Learn about Cleaning buttons
+                HStack {
+                    Button {
+                        showingWhatsNewSheet = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 11))
+                            Text("What's New")
+                                .font(.system(size: 11))
+                        }
+                        .foregroundStyle(.purple)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Spacer()
+                    
+                    Button {
+                        showingExplainerSheet = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "questionmark.circle")
+                                .font(.system(size: 11))
+                            Text("Learn about Cleaning")
+                                .font(.system(size: 11))
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, DesignConstants.Spacing.sm)
+            }
+            .padding(.top, DesignConstants.Spacing.xs)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxHeight: isExpanded ? .infinity : 0, alignment: .top)
+            .clipped()
+            .opacity(isExpanded ? 1 : 0)
+        }
+    }
+}
+
 // MARK: - Legacy Compatibility Typealias
 /// Temporary alias for transition period
 typealias DisplayPhaseStepsGroup = PipelinePhaseStepsGroup

@@ -1631,6 +1631,120 @@ struct HeuristicBoundaryDetector: Sendable {
         
         return count
     }
+    
+    // MARK: - Headerless Auxiliary List Detection
+    
+    /// Detect auxiliary lists by content patterns when headers are missing.
+    ///
+    /// This method supplements header-based detection by recognizing the
+    /// internal structure of common auxiliary lists:
+    /// - Abbreviation lists: "ABBREVIATION = Full Name" or "ABBR — Description"
+    /// - Contributor lists: "Chapter N: Name, Credential — Institution"
+    ///
+    /// Position constraint: Must appear within first 40% of document.
+    func detectHeaderlessAuxiliaryLists(
+        in content: String
+    ) -> [HeuristicAuxiliaryListResult] {
+        let lines = content.components(separatedBy: .newlines)
+        let maxLine = Int(Double(lines.count) * 0.40)
+        var results: [HeuristicAuxiliaryListResult] = []
+        
+        // --- Abbreviation list detection ---
+        // Look for clusters of 3+ consecutive lines matching abbreviation patterns
+        let abbreviationPattern = try! NSRegularExpression(
+            pattern: #"^[A-Z]{2,10}\s*[—–\-=:]\s*.{5,}"#,
+            options: []
+        )
+        var abbrClusterStart: Int? = nil
+        var abbrClusterEnd: Int = 0
+        var abbrConsecutive = 0
+        
+        for lineIndex in 0..<min(maxLine, lines.count) {
+            let line = lines[lineIndex].trimmingCharacters(in: .whitespaces)
+            let range = NSRange(line.startIndex..., in: line)
+            
+            if abbreviationPattern.firstMatch(in: line, range: range) != nil {
+                if abbrClusterStart == nil { abbrClusterStart = lineIndex }
+                abbrClusterEnd = lineIndex
+                abbrConsecutive += 1
+            } else if !line.isEmpty {
+                // Non-matching, non-empty line breaks the cluster
+                if abbrConsecutive >= 3, let start = abbrClusterStart {
+                    results.append(HeuristicAuxiliaryListResult(
+                        listType: "abbreviations",
+                        startLine: start,
+                        endLine: abbrClusterEnd,
+                        confidence: min(0.7, 0.5 + Double(abbrConsecutive) * 0.05),
+                        matchedPattern: "Abbreviation pattern cluster (\(abbrConsecutive) entries)",
+                        entryCount: abbrConsecutive,
+                        explanation: "Detected abbreviation list by content pattern (no header)"
+                    ))
+                }
+                abbrClusterStart = nil
+                abbrConsecutive = 0
+            }
+        }
+        // Check final cluster
+        if abbrConsecutive >= 3, let start = abbrClusterStart {
+            results.append(HeuristicAuxiliaryListResult(
+                listType: "abbreviations",
+                startLine: start,
+                endLine: abbrClusterEnd,
+                confidence: min(0.7, 0.5 + Double(abbrConsecutive) * 0.05),
+                matchedPattern: "Abbreviation pattern cluster (\(abbrConsecutive) entries)",
+                entryCount: abbrConsecutive,
+                explanation: "Detected abbreviation list by content pattern (no header)"
+            ))
+        }
+        
+        // --- Contributor list detection ---
+        // Look for clusters of 2+ lines matching "Chapter N: Name" patterns
+        let contributorPattern = try! NSRegularExpression(
+            pattern: #"^Chapter\s+\d+\s*:\s*[A-Z][a-z]+"#,
+            options: []
+        )
+        var contribClusterStart: Int? = nil
+        var contribClusterEnd: Int = 0
+        var contribConsecutive = 0
+        
+        for lineIndex in 0..<min(maxLine, lines.count) {
+            let line = lines[lineIndex].trimmingCharacters(in: .whitespaces)
+            let range = NSRange(line.startIndex..., in: line)
+            
+            if contributorPattern.firstMatch(in: line, range: range) != nil {
+                if contribClusterStart == nil { contribClusterStart = lineIndex }
+                contribClusterEnd = lineIndex
+                contribConsecutive += 1
+            } else if !line.isEmpty {
+                if contribConsecutive >= 2, let start = contribClusterStart {
+                    results.append(HeuristicAuxiliaryListResult(
+                        listType: "contributors",
+                        startLine: start,
+                        endLine: contribClusterEnd,
+                        confidence: min(0.75, 0.55 + Double(contribConsecutive) * 0.05),
+                        matchedPattern: "Contributor pattern cluster (\(contribConsecutive) entries)",
+                        entryCount: contribConsecutive,
+                        explanation: "Detected contributor list by content pattern (no header)"
+                    ))
+                }
+                contribClusterStart = nil
+                contribConsecutive = 0
+            }
+        }
+        if contribConsecutive >= 2, let start = contribClusterStart {
+            results.append(HeuristicAuxiliaryListResult(
+                listType: "contributors",
+                startLine: start,
+                endLine: contribClusterEnd,
+                confidence: min(0.75, 0.55 + Double(contribConsecutive) * 0.05),
+                matchedPattern: "Contributor pattern cluster (\(contribConsecutive) entries)",
+                entryCount: contribConsecutive,
+                explanation: "Detected contributor list by content pattern (no header)"
+            ))
+        }
+        
+        return results
+    }
 }
 
 // MARK: - Heuristic Auxiliary List Result

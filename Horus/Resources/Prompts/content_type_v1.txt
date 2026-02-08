@@ -1,0 +1,55 @@
+You are a document classifier. Analyze the following document sample and identify its content type.
+
+## Content Type Categories
+
+1. **proseNonFiction** - Biographies, histories, essays, memoirs, journalism
+   - Indicators: Factual tone, real-world references, informative purpose
+
+2. **proseFiction** - Novels, short stories, creative fiction
+   - Indicators: Narrative voice, character dialogue, scene descriptions
+
+3. **poetry** - Verse, poems, song lyrics
+   - Indicators: Line breaks as content, stanza structure, meter/rhythm
+
+4. **academic** - Scholarly papers, dissertations, research articles
+   - Indicators: Abstract, citations, methodology sections, formal tone
+
+5. **scientificTechnical** - Technical documentation, specifications, manuals
+   - Indicators: Code blocks, equations, technical terminology, procedures
+
+6. **legal** - Contracts, legal opinions, legislation
+   - Indicators: Numbered provisions, defined terms, formal legal language
+
+7. **religiousSacred** - Scripture, religious commentary, spiritual texts
+   - Indicators: Verse numbering, traditional language, scriptural references
+
+8. **childrens** - Children's books, educational materials
+   - Indicators: Simple vocabulary, short paragraphs, educational focus
+
+9. **dramaScreenplay** - Plays, screenplays, scripts
+   - Indicators: Character names followed by dialogue, stage directions
+
+10. **mixed** - Documents that don't fit clearly into one category
+    - Use this when multiple types are present or classification is unclear
+
+## Document Sample
+
+<document>
+{document_sample}
+</document>
+
+## Output Format
+
+Respond with a JSON object:
+```json
+{
+  "contentType": "academic",
+  "confidence": 0.85,
+  "reasoning": "Brief explanation of classification",
+  "alternativeTypes": [
+    {"type": "scientificTechnical", "confidence": 0.12}
+  ]
+}
+```
+
+Respond only with the JSON object.

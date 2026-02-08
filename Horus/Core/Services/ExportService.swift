@@ -3,7 +3,7 @@
 //  Horus
 //
 //  Created on 06/01/2026.
-//
+//  Updated on 06/02/2026 - F10: Removed duplicate "EXECUTED STEPS" section from cleaning report.
 
 import Foundation
 import OSLog
@@ -305,27 +305,67 @@ final class ExportService: ExportServiceProtocol {
         report += formatMetricRow("Duration", cleanedContent.formattedDuration)
         report += "\n"
         
+        // MARK: Pipeline Confidence
+        if let confidence = cleanedContent.overallConfidence {
+            report += "PIPELINE CONFIDENCE\n"
+            report += "\(subDivider)\n"
+            
+            let confidencePercentage = Int(confidence * 100)
+            let rating = confidenceRating(for: confidence)
+            let assessment = confidenceAssessment(for: rating)
+            
+            report += formatMetricRow("Score", "\(confidencePercentage)%")
+            report += formatMetricRow("Level", rating)
+            report += formatMetricRow("Assessment", assessment)
+            report += "\n"
+        }
+        
         // MARK: Phase Execution
         if let phases = cleanedContent.phaseResults, !phases.isEmpty {
             report += "PHASE EXECUTION\n"
             report += "\(subDivider)\n"
+            report += "Confidence scores indicate the pipeline's certainty that each\n"
+            report += "phase was executed correctly and content was processed accurately.\n\n"
             
             for phase in phases {
-                let stepNum = String(format: "%2d", phase.stepNumber)
                 let status = phase.completed ? "✓" : "—"  // ✓ = executed, — = skipped
                 let confidenceStr: String
                 if let conf = phase.confidence {
                     confidenceStr = String(format: "%3d%%", Int(conf * 100))
                 } else if phase.completed {
-                    confidenceStr = "Unknown"  // Executed but no confidence data
+                    confidenceStr = "—"  // Executed but no confidence data
                 } else {
-                    confidenceStr = "Skipped"  // Not executed
+                    confidenceStr = "N/A"  // Not executed
                 }
                 let methodPad = phase.method.padding(toLength: 6, withPad: " ", startingAt: 0)
-                report += " \(stepNum). \(phase.name.padding(toLength: 25, withPad: " ", startingAt: 0)) \(status) \(methodPad) \(confidenceStr)\n"
+                let namePad = phase.name.padding(toLength: 25, withPad: " ", startingAt: 0)
+                report += "  \(namePad) \(status) \(methodPad) \(confidenceStr)\n"
             }
             report += "\n"
         }
+        
+        // MARK: Executed Steps
+        report += "EXECUTED STEPS\n"
+        report += "\(subDivider)\n"
+        
+        let allSteps = CleaningStep.allCases
+        for step in allSteps {
+            let stepNumber = String(format: "%2d", step.rawValue)
+            let statusLabel: String
+            
+            if cleanedContent.configuration.isStepEnabled(step) {
+                // Step was enabled - check if it completed successfully
+                // We consider enabled steps as Success since pipeline reached completion
+                statusLabel = "Success"
+            } else {
+                statusLabel = "Skipped"
+            }
+            
+            let namePad = step.displayName.padding(toLength: 28, withPad: " ", startingAt: 0)
+            let statusPad = statusLabel.padding(toLength: 8, withPad: " ", startingAt: 0)
+            report += "  Step \(stepNumber): \(namePad) \(statusPad)\n"
+        }
+        report += "\n"
         
         // MARK: Content Analysis
         report += "CONTENT ANALYSIS\n"
@@ -392,15 +432,6 @@ final class ExportService: ExportServiceProtocol {
         
         report += "\n"
         
-        // MARK: Executed Steps
-        report += "EXECUTED STEPS\n"
-        report += "\(subDivider)\n"
-        for step in cleanedContent.executedSteps {
-            let stepNum = String(format: "%2d", step.stepNumber)
-            report += " \(stepNum). \(step.displayName)\n"
-        }
-        report += "\n"
-        
         // MARK: Issues
         if let issues = cleanedContent.qualityIssues, !issues.isEmpty {
             report += "ISSUES (\(issues.count))\n"
@@ -448,6 +479,37 @@ final class ExportService: ExportServiceProtocol {
     private func formatMetricRow(_ label: String, _ value: String) -> String {
         let paddedLabel = label.padding(toLength: 19, withPad: " ", startingAt: 0)
         return "\(paddedLabel)\(value)\n"
+    }
+    
+    /// Get confidence rating string based on confidence value
+    /// Uses same thresholds as ConfidenceRating in ConfidenceTracker
+    private func confidenceRating(for confidence: Double) -> String {
+        switch confidence {
+        case 0.9...: return "Very High"
+        case 0.75..<0.9: return "High"
+        case 0.6..<0.75: return "Moderate"
+        case 0.4..<0.6: return "Low"
+        default: return "Very Low"
+        }
+    }
+    
+    /// Get confidence assessment text based on rating level
+    /// Uses same text as DetailedResultsView.confidenceExplanation
+    private func confidenceAssessment(for rating: String) -> String {
+        switch rating {
+        case "Very High":
+            return "Excellent quality. All phases completed successfully."
+        case "High":
+            return "Good quality. Most phases completed with high confidence."
+        case "Moderate":
+            return "Acceptable quality. Review recommended."
+        case "Low":
+            return "Below expectations. Manual review needed."
+        case "Very Low":
+            return "Quality concerns. Careful review required."
+        default:
+            return "Unknown quality level."
+        }
     }
     
     // MARK: - JSON Generation

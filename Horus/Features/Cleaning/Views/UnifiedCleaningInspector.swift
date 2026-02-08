@@ -307,7 +307,7 @@ struct UnifiedCleaningInspector: View {
             // Container 2: API/Financial metrics
             HStack(spacing: 0) {
                 metricCell(
-                    value: (content.inputTokens + content.outputTokens).formatted(),
+                    value: content.tokensUsed.formatted(),
                     label: "Tokens Used"
                 )
                 metricCell(

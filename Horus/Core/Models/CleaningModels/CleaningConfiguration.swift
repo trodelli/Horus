@@ -460,6 +460,24 @@ struct CleaningConfiguration: Codable, Equatable, Sendable {
         isModifiedFromPreset = differsFromPreset
     }
     
+    // MARK: - Exclusion Zone Helpers (Phase B)
+    
+    /// Sub-components within front matter that the user has disabled.
+    /// These should be preserved as exclusion zones during front matter removal.
+    var disabledFrontMatterSubComponents: [CleaningStep] {
+        var disabled: [CleaningStep] = []
+        if !removeTableOfContents { disabled.append(.removeTableOfContents) }
+        return disabled
+    }
+    
+    /// Sub-components within back matter that the user has disabled.
+    /// These should be preserved as exclusion zones during back matter removal.
+    var disabledBackMatterSubComponents: [CleaningStep] {
+        var disabled: [CleaningStep] = []
+        if !removeIndex { disabled.append(.removeIndex) }
+        return disabled
+    }
+    
     // MARK: - Presets (Static Convenience)
     
     /// Default configuration (balanced cleaning).

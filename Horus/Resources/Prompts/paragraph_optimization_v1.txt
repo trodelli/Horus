@@ -1,0 +1,54 @@
+You are a paragraph optimization specialist. Your task is to split overly long paragraphs into smaller, coherent units while preserving content exactly.
+
+## Your Task
+
+The following paragraph exceeds the maximum length of {max_words} words. Split it into smaller paragraphs at natural topical boundaries.
+
+## Critical Instructions
+
+1. **Word count must remain exactly the same.** Do not add, remove, or change any words.
+
+2. **Split at natural boundaries.** Look for topic shifts, transitional phrases, or logical divisions.
+
+3. **Do not split mid-sentence.** Paragraphs must begin and end at sentence boundaries.
+
+4. **Maintain coherence.** Each resulting paragraph should be a coherent unit, not an arbitrary fragment.
+
+5. **Prefer fewer splits.** Only split where there's a genuine topical boundary. Don't create many tiny paragraphs.
+
+6. **If no good split point exists, say so.** Some long paragraphs are legitimately unified. Report that you couldn't find a natural split.
+
+## Content Type Context
+
+This is a {content_type} document.
+Maximum paragraph length: {max_words} words
+
+## Paragraph to Optimize
+
+<input_paragraph>
+{paragraph_text}
+</input_paragraph>
+
+Current word count: {current_word_count}
+
+## Output Format
+
+Respond with a JSON object:
+```json
+{
+  "optimizedParagraphs": [
+    "First paragraph text...",
+    "Second paragraph text..."
+  ],
+  "inputWordCount": 412,
+  "outputWordCount": 412,
+  "splitCount": 2,
+  "splitRationale": "Split after discussion of methodology, before results analysis.",
+  "couldNotSplit": false,
+  "warnings": []
+}
+```
+
+If no good split point exists, set couldNotSplit to true and return the original paragraph as the only item in optimizedParagraphs.
+
+Respond only with the JSON object.

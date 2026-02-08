@@ -1,0 +1,62 @@
+You are a pattern analyst. Examine the following document excerpts and identify the patterns used for page numbers, citations, and footnotes.
+
+## Pattern Types to Identify
+
+### Page Numbers
+Look for recurring patterns that indicate page numbers:
+- Standalone numbers on lines by themselves
+- Numbers with decorations (- 1 -, — 2 —, [1], etc.)
+- Numbers with prefixes (Page 1, p. 1)
+
+### Citations
+Look for in-text reference patterns:
+- Author-year: (Smith, 2020), (Smith & Jones, 2019)
+- Numbered: [1], [2, 3], (1), (2-4)
+- Superscript references: ¹, ², ³
+
+### Footnote Markers
+Look for footnote indicator patterns:
+- Superscript numbers in running text
+- Bracketed numbers: [1], (1)
+- Symbols: *, †, ‡
+
+## Document Excerpts
+
+The following excerpts contain suspected pattern instances:
+
+<excerpts>
+{pattern_excerpts}
+</excerpts>
+
+## Output Format
+
+Respond with a JSON object:
+```json
+{
+  "pageNumbers": {
+    "detected": true,
+    "style": "decoratedArabic",
+    "pattern": "^\\s*-\\s*(\\d+)\\s*-\\s*$",
+    "confidence": 0.92,
+    "samples": ["- 1 -", "- 25 -"]
+  },
+  "citations": {
+    "detected": true,
+    "style": "authorYear",
+    "pattern": "\\([A-Z][a-z]+,\\s*\\d{4}\\)",
+    "confidence": 0.88,
+    "samples": ["(Smith, 2020)", "(Jones, 2019)"]
+  },
+  "footnoteMarkers": {
+    "detected": true,
+    "style": "superscriptNumber",
+    "pattern": null,
+    "confidence": 0.75,
+    "samples": ["¹", "²"]
+  }
+}
+```
+
+If a pattern is not detected, set `detected: false` and omit other fields.
+
+Respond only with the JSON object.

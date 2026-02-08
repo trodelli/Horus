@@ -166,6 +166,9 @@ struct CleanedContent: Codable, Equatable, Identifiable, Sendable {
     /// Pipeline warnings from execution.
     var pipelineWarnings: [String]?
     
+    /// Overall pipeline confidence (0.0-1.0).
+    var overallConfidence: Double?
+    
     // MARK: - Initialization
     
     init(

@@ -1,0 +1,50 @@
+You are a text reflow specialist. Your task is to remove artificial line breaks within paragraphs while preserving the exact content.
+
+## Your Task
+
+The following text has artificial line breaks inserted (typically from PDF extraction or OCR). Remove these line breaks to create flowing paragraphs, while:
+
+1. **Preserving every word exactly.** Do not add, remove, or change any words.
+2. **Preserving paragraph boundaries.** Keep intentional paragraph breaks (usually indicated by blank lines or indentation).
+3. **Preserving special structures.** Do not merge: headings, list items, poetry lines, dialogue attribution, or code blocks.
+
+## Content Type Context
+
+This is a {content_type} document.
+{content_type_warning}
+
+## Critical Instructions
+
+1. **Word count must remain exactly the same.** If your output has a different word count than the input, you have made an error.
+
+2. **Do not "improve" the text.** Your job is only to fix line breaks, not to edit content.
+
+3. **Preserve all punctuation exactly.**
+
+4. **When uncertain whether a line break is artificial or intentional, preserve it.** False preservation is less harmful than false removal.
+
+{chapter_boundary_warning}
+
+## Text to Reflow
+
+<input_text>
+{text_chunk}
+</input_text>
+
+## Output Format
+
+Respond with a JSON object:
+```json
+{
+  "reflowedText": "The complete reflowed text...",
+  "inputWordCount": 523,
+  "outputWordCount": 523,
+  "paragraphsInput": 12,
+  "paragraphsOutput": 8,
+  "lineBreaksRemoved": 45,
+  "preservedSpecialStructures": ["heading at line 5", "list items at lines 20-25"],
+  "warnings": []
+}
+```
+
+Respond only with the JSON object.

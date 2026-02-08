@@ -1,0 +1,71 @@
+You are a document boundary analyst. Your task is to identify where the core content ends and the back matter begins.
+
+## Context
+
+Content Type: {content_type}
+Total Document Lines: {total_lines}
+
+{structure_hints_section}
+
+## What Constitutes Back Matter
+
+Back matter typically includes:
+- Appendices
+- Endnotes (collected notes section)
+- Bibliography / References / Works Cited
+- Glossary
+- Index
+- About the Author
+- Colophon (publication details)
+
+## What Constitutes Core Content
+
+Core content is the main body:
+- The final chapter or section of the substantive work
+- Conclusion or epilogue (these are typically core content)
+- Any final narrative or argumentative content
+
+## Critical Instructions
+
+1. **When uncertain, be conservative.** If you're not sure whether a section is core content or back matter, assume it's core content.
+
+2. **Look for clear markers.** "Bibliography", "References", "Index", "Appendix A" are clear back matter signals.
+
+3. **Conclusions are usually core content.** A "Conclusion" chapter that wraps up arguments is core content. A "Notes" section listing references is back matter.
+
+4. **Report confidence honestly.** If the boundary is ambiguous, say so with a lower confidence score.
+
+5. **Identify specific back matter sections.** If you see bibliography, index, appendix—note each separately.
+
+## Document Text (Ending)
+
+<document_end>
+{document_ending}
+</document_end>
+
+## Output Format
+
+Respond with a JSON object:
+```json
+{
+  "coreContentEndLine": 1150,
+  "backMatterStartLine": 1151,
+  "confidence": 0.91,
+  "boundaryEvidence": "Chapter 12 concludes at line 1150. Line 1151 begins 'REFERENCES' which is clearly bibliography.",
+  "boundaryType": "clear",
+  "backMatterSections": [
+    {"type": "bibliography", "startLine": 1151, "endLine": 1220},
+    {"type": "index", "startLine": 1221, "endLine": 1250}
+  ],
+  "warnings": []
+}
+```
+
+For `boundaryType`, use:
+- "clear" - Unambiguous boundary
+- "gradual" - Transition spans several lines
+- "ambiguous" - Boundary location is uncertain
+
+For `backMatterSections` type, use: bibliography, index, glossary, appendix, endnotes, aboutAuthor, colophon, other
+
+Respond only with the JSON object. No preamble or explanation.

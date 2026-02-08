@@ -3,9 +3,11 @@
 //  Horus
 //
 //  Created on 28/01/2026.
+//  Updated on 06/02/2026 - F12: Removed debug prints. F4: Switched to cached AppState stats.
 //
 
 import SwiftUI
+import OSLog
 
 /// Session statistics summary displayed at the bottom of the navigation sidebar.
 /// Shows processed document count with OCR/Clean breakdown and total spending.
@@ -96,9 +98,9 @@ struct SessionStatsView: View {
     
     // MARK: - Computed Properties
     
-    /// Session statistics calculated from all documents
+    /// Session statistics from cached AppState value
     private var stats: SessionStats {
-        SessionStats.calculate(from: appState.allSessionDocuments)
+        appState.sessionStats
     }
     
     /// Formatted cost string
@@ -162,18 +164,6 @@ struct SessionStats {
     
     /// Calculate session stats from a collection of documents
     static func calculate(from documents: [Document]) -> SessionStats {
-        // Debug logging
-        print("📊 SessionStats Debug:")
-        print("Total documents: \(documents.count)")
-        
-        for (index, doc) in documents.enumerated() {
-            print("Doc \(index + 1): \(doc.displayName)")
-            print("  - Has result: \(doc.result != nil)")
-            print("  - Result model: \(doc.result?.model ?? "none")")
-            print("  - Has cleanedContent: \(doc.cleanedContent != nil)")
-            print("  - isCompleted: \(doc.isCompleted)")
-        }
-        
         // 1. PROCESSED COUNT: Documents that incurred processing costs
         //    This aligns "processed" with actual spending (OCR or Cleaning)
         let processed = documents.filter { doc in
@@ -201,11 +191,8 @@ struct SessionStats {
             return sum + ocrCost + cleaningCost
         }
         
-        print("📊 Calculated Stats:")
-        print("  - Processed: \(processed)")
-        print("  - OCR: \(ocrProcessed)")
-        print("  - Clean: \(cleanProcessed)")
-        print("  - Cost: \(cost)")
+        let logger = Logger(subsystem: "com.horus.app", category: "SessionStats")
+        logger.debug("Session stats calculated: \(processed) processed (\(ocrProcessed) OCR, \(cleanProcessed) clean), cost: \(cost as NSDecimalNumber)")
         
         return SessionStats(
             processedCount: processed,

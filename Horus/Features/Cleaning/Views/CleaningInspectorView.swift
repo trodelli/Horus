@@ -340,10 +340,10 @@ struct CleaningInspectorView: View {
                     HStack(spacing: 4) {
                         switch viewModel.currentPhase {
                         case .reconnaissance:
-                            Image(systemName: "brain")
+                            Image(systemName: "gearshape.2")
                                 .font(.caption)
                                 .foregroundStyle(.purple)
-                            Text("Content Analysis")
+                            Text("Initializing")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         case .boundaryDetection:
@@ -570,60 +570,13 @@ struct CleaningInspectorView: View {
     
     private func pipelineStepsSection(viewModel: CleaningViewModel) -> some View {
         VStack(alignment: .leading, spacing: DesignConstants.Spacing.sm) {
-            // Header
-            HStack {
-                InspectorSectionHeader(title: "Pipeline Steps", icon: "list.number")
-                
-                Spacer()
-                
-                // Step count badge
-                Text("\(viewModel.enabledStepCount)/\(CleaningStep.totalSteps)")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(DesignConstants.CornerRadius.xs)
-            }
+            InspectorSectionHeader(title: "Pipeline", icon: "list.triangle")
             
-            // All steps organized by PipelinePhase (V3 visual grouping)
-            VStack(spacing: 0) {
-                ForEach(PipelinePhase.allCases) { phase in
-                    PipelinePhaseStepsGroup(phase: phase, viewModel: viewModel)
-                }
-            }
-            
-            // Learn about Cleaning button
-            HStack {
-                Button {
-                    showingWhatsNewSheet = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 11))
-                        Text("What's New")
-                            .font(.system(size: 11))
-                    }
-                    .foregroundStyle(.purple)
-                }
-                .buttonStyle(.plain)
-                
-                Spacer()
-                
-                Button {
-                    showingExplainerSheet = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "questionmark.circle")
-                            .font(.system(size: 11))
-                        Text("Learn about Cleaning")
-                            .font(.system(size: 11))
-                    }
-                    .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.top, DesignConstants.Spacing.sm)
+            PipelineStepsSelectorView(
+                viewModel: viewModel,
+                showingWhatsNewSheet: $showingWhatsNewSheet,
+                showingExplainerSheet: $showingExplainerSheet
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

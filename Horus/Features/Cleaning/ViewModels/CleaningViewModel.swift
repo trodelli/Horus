@@ -4,6 +4,7 @@
 //
 //  Created by Claude on 2026-01-22.
 //  Updated 2026-02-04: Switched to EvolvedCleaningPipeline (V3)
+//  Updated 2026-02-06: F1/F2/F11 — Fixed confidence aggregation, persistence bug, cached confidence.
 //
 
 
@@ -91,11 +92,8 @@ final class CleaningViewModel {
     /// Full evolved result (for DetailedResultsView)
     private(set) var evolvedResult: EvolvedCleaningResult?
     
-    /// Computed pipeline confidence from evolved result (for DetailedResultsView)
-    var pipelineConfidence: PipelineConfidence? {
-        guard let result = evolvedResult else { return nil }
-        return ConfidenceTracker().calculateConfidence(from: result)
-    }
+    /// Pipeline confidence calculated once after cleaning completes (for DetailedResultsView)
+    private(set) var pipelineConfidence: PipelineConfidence?
     
     // MARK: - Processing State
     
@@ -388,6 +386,7 @@ extension CleaningViewModel {
         completedPhases = []
         phaseConfidences = [:]
         evolvedResult = nil
+        pipelineConfidence = nil
         
         updateStepStates()
     }
@@ -430,6 +429,7 @@ extension CleaningViewModel {
             overallConfidence = result.overallConfidence
             reconnaissanceWarnings = result.reconnaissanceWarnings
             evolvedResult = result  // Store full result for DetailedResultsView
+            pipelineConfidence = ConfidenceTracker().calculateConfidence(from: result)
             
             // Populate phase confidences for progress UI
             if let hints = result.structureHints {
@@ -440,13 +440,23 @@ extension CleaningViewModel {
                 phaseConfidences[.boundaryDetection] = boundary.confidence
                 completedPhases.insert(.boundaryDetection)
             }
-            // Cleaning phase completed with overall result
+            // Cleaning phase: aggregate from phases 3-5 (structural, content, scholarly)
             completedPhases.insert(.cleaning)
-            phaseConfidences[.cleaning] = 0.85  // V2 pipeline doesn't report confidence per-phase
+            let cleaningPhaseKeys = [3, 4, 5]
+            let cleaningConfidences = cleaningPhaseKeys.compactMap { result.phaseConfidences[$0] }
+            if !cleaningConfidences.isEmpty {
+                phaseConfidences[.cleaning] = cleaningConfidences.reduce(0, +) / Double(cleaningConfidences.count)
+            }
+            // If no real confidence data, don't insert — UI should show "unknown" not fake values
             
-            // Optimization phase (always runs unless bypassed)
+            // Optimization phase: aggregate from phases 6-7 (back matter, optimization)
             completedPhases.insert(.optimization)
-            phaseConfidences[.optimization] = 0.9
+            let optimizationPhaseKeys = [6, 7]
+            let optimizationConfidences = optimizationPhaseKeys.compactMap { result.phaseConfidences[$0] }
+            if !optimizationConfidences.isEmpty {
+                phaseConfidences[.optimization] = optimizationConfidences.reduce(0, +) / Double(optimizationConfidences.count)
+            }
+            // If no real confidence data, don't insert — UI should show "unknown" not fake values
             
             if let review = result.finalReview {
                 phaseConfidences[.finalReview] = review.qualityScore
@@ -465,7 +475,7 @@ extension CleaningViewModel {
             logger.info("V3 cleaning completed. Confidence: \(String(format: "%.1f%%", result.overallConfidence * 100))")
             
             // Notify listener to persist immediately (session state persistence)
-            onCleaningCompleted?(result.cleanedContent)
+            onCleaningCompleted?(enrichedContent)
             
         } catch CleaningError.cancelled {
             state = .cancelled
@@ -739,6 +749,7 @@ extension CleaningViewModel {
         enriched.phaseResults = phases
         enriched.qualityIssues = issues
         enriched.pipelineWarnings = warnings
+        enriched.overallConfidence = result.overallConfidence
         
         return enriched
     }

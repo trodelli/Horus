@@ -3,6 +3,7 @@
 //  Horus
 //
 //  Created by Claude on 2026-02-03.
+//  Updated on 06/02/2026 - F7: Fixed escaped string interpolation in PromptError.description.
 //  Part of Cleaning Pipeline Evolution - Phase M1 (Foundation)
 //
 //  Purpose: Infrastructure for loading and managing AI prompt templates.
@@ -95,13 +96,14 @@ actor PromptManager {
         }
         
         // R8.3: Enhanced logging for debugging PromptError
-        logger.debug("[PromptManager] Loading template: \(type.rawValue).txt from Prompts/")
+        // F5: Templates are now in bundle root (not Prompts/ subdirectory) after Xcode config
+        logger.debug("[PromptManager] Loading template: \(type.rawValue).txt from bundle resources")
         
-        // Load from bundle
-        guard let url = Bundle.main.url(forResource: type.rawValue, withExtension: "txt", subdirectory: "Prompts") else {
+        // Load from bundle root (F5 fix: files are in Resources/, not Resources/Prompts/)
+        guard let url = Bundle.main.url(forResource: type.rawValue, withExtension: "txt") else {
             logger.error("[PromptManager] Template NOT FOUND: \(type.rawValue).txt")
             logger.error("[PromptManager] Bundle path: \(Bundle.main.bundlePath)")
-            logger.error("[PromptManager] Available resources in Prompts/: \(Bundle.main.urls(forResourcesWithExtension: "txt", subdirectory: "Prompts")?.map { $0.lastPathComponent } ?? [])")
+            logger.error("[PromptManager] Available .txt resources: \(Bundle.main.urls(forResourcesWithExtension: "txt", subdirectory: nil)?.map { $0.lastPathComponent } ?? [])")
             throw PromptError.templateNotFound(type: type)
         }
         
@@ -153,13 +155,13 @@ enum PromptError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .templateNotFound(let type):
-            return "Prompt template not found: \\(type.displayName) (\\(type.filename))"
+            return "Prompt template not found: \(type.displayName) (\(type.filename))"
         case .loadFailed(let type, let reason):
-            return "Failed to load template \\(type.displayName): \\(reason)"
+            return "Failed to load template \(type.displayName): \(reason)"
         case .missingParameter(let name, let template):
-            return "Missing required parameter '\\(name)' for template '\\(template)'"
+            return "Missing required parameter '\(name)' for template '\(template)'"
         case .renderingFailed(let reason):
-            return "Template rendering failed: \\(reason)"
+            return "Template rendering failed: \(reason)"
         }
     }
 }

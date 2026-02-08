@@ -898,6 +898,18 @@ final class MockTextProcessingService: TextProcessingServiceProtocol, @unchecked
         return usePassthrough ? realService.removeMultipleSections(content: content, sections: sections) : content
     }
     
+    func removeMultipleSectionsWithReport(content: String, sections: [(startLine: Int, endLine: Int)]) -> TextProcessingService.SectionRemovalResult {
+        removeMultipleSectionsCallCount += 1
+        if usePassthrough {
+            return realService.removeMultipleSectionsWithReport(content: content, sections: sections)
+        }
+        return TextProcessingService.SectionRemovalResult(
+            content: content, linesRemoved: 0,
+            sectionsRemoved: 0, sectionsRejected: 0,
+            rejectedDetails: []
+        )
+    }
+    
     func removePatternsInText(content: String, patterns: [String]) -> (content: String, changeCount: Int) {
         removePatternsInTextCallCount += 1
         return usePassthrough ? realService.removePatternsInText(content: content, patterns: patterns) : (content, 0)
@@ -913,6 +925,14 @@ final class MockTextProcessingService: TextProcessingServiceProtocol, @unchecked
         return usePassthrough ? realService.removeFootnoteMarkers(content: content, markerPattern: markerPattern) : (content, 0)
     }
     
+    func cleanOrphanedCitationArtifacts(_ content: String) -> String {
+        return usePassthrough ? realService.cleanOrphanedCitationArtifacts(content) : content
+    }
+    
+    func removeDecorativeEmDashes(_ content: String) -> String {
+        return usePassthrough ? realService.removeDecorativeEmDashes(content) : content
+    }
+    
     // MARK: - Phase 3: Heuristic Detection
     
     private(set) var detectNotesSectionsHeuristicCallCount: Int = 0
@@ -920,6 +940,24 @@ final class MockTextProcessingService: TextProcessingServiceProtocol, @unchecked
     func detectNotesSectionsHeuristic(content: String) -> [(startLine: Int, endLine: Int)] {
         detectNotesSectionsHeuristicCallCount += 1
         return usePassthrough ? realService.detectNotesSectionsHeuristic(content: content) : []
+    }
+    
+    // MARK: - Code Block & Table Preservation
+    
+    func extractCodeBlocks(_ content: String) -> (content: String, codeBlocks: [String: String]) {
+        return usePassthrough ? realService.extractCodeBlocks(content) : (content, [:])
+    }
+    
+    func restoreCodeBlocks(_ content: String, codeBlocks: [String: String]) -> String {
+        return usePassthrough ? realService.restoreCodeBlocks(content, codeBlocks: codeBlocks) : content
+    }
+    
+    func extractTables(_ content: String) -> (content: String, tables: [String: String]) {
+        return usePassthrough ? realService.extractTables(content) : (content, [:])
+    }
+    
+    func restoreTables(_ content: String, tables: [String: String]) -> String {
+        return usePassthrough ? realService.restoreTables(content, tables: tables) : content
     }
     
     // MARK: - Reset

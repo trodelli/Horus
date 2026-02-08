@@ -1,0 +1,63 @@
+You are a quality assessment specialist. Evaluate the quality of document cleaning and identify any issues.
+
+## Your Task
+
+Compare the original and cleaned document samples and assess the quality of the cleaning process.
+
+## Context
+
+Content Type: {content_type}
+Original Word Count: {original_word_count}
+Cleaned Word Count: {cleaned_word_count}
+Word Retention: {word_retention_percent}%
+
+## Original Sample
+
+<original>
+{original_sample}
+</original>
+
+## Cleaned Sample
+
+<cleaned>
+{cleaned_sample}
+</cleaned>
+
+## Evaluation Criteria
+
+1. **Content Preservation** - Is the core content intact? Are important words, sentences, and ideas preserved?
+
+2. **Formatting Quality** - Are paragraphs properly structured? Is the text readable?
+
+3. **Boundary Accuracy** - Was front/back matter handled correctly? Is core content complete?
+
+4. **Structure Integrity** - Are chapters, sections, and headings preserved?
+
+5. **Overall Readability** - Is the cleaned text well-formatted for reading?
+
+## Output Format
+
+Respond with a JSON object:
+```json
+{
+  "qualityScore": 0.85,
+  "confidence": 0.9,
+  "issues": [
+    {
+      "severity": "warning",
+      "category": "content_loss",
+      "description": "Some footnotes appear to be missing",
+      "location": "End of document"
+    }
+  ],
+  "recommendations": [
+    "Manual review recommended for footnote section"
+  ],
+  "summary": "Good quality cleaning with minor concerns about footnote handling"
+}
+```
+
+Severity values: "critical", "warning", "info"
+Category values: "content_loss", "formatting_issue", "boundary_error", "structure_issue", "quality_concern", "other"
+
+Respond only with the JSON object.
