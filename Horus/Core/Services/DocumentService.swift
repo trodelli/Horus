@@ -28,6 +28,9 @@ protocol DocumentServiceProtocol {
     
     /// Read document data for API submission
     func readDocumentData(from url: URL) throws -> Data
+    
+    /// Read text content from a text-based document
+    func readTextContent(from url: URL) throws -> String
 }
 
 // MARK: - Load Result
@@ -349,6 +352,33 @@ final class DocumentService: DocumentServiceProtocol {
         }
     }
     
+    /// Read text content from a text-based document (txt, md, json, etc.)
+    /// - Parameter url: The file URL
+    /// - Returns: Text content as string
+    func readTextContent(from url: URL) throws -> String {
+        // Start accessing security-scoped resource if needed
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+        
+        do {
+            return try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            // Try other encodings
+            if let content = try? String(contentsOf: url, encoding: .utf16) {
+                return content
+            }
+            if let content = try? String(contentsOf: url, encoding: .ascii) {
+                return content
+            }
+            logger.error("Failed to read text content: \(error.localizedDescription)")
+            throw DocumentLoadError.fileNotReadable(url)
+        }
+    }
+    
     // MARK: - Content Type Detection
     
     /// Determine the UTType for a file
@@ -454,5 +484,9 @@ final class MockDocumentService: DocumentServiceProtocol {
     
     func readDocumentData(from url: URL) throws -> Data {
         Data()
+    }
+    
+    func readTextContent(from url: URL) throws -> String {
+        "Mock text content"
     }
 }

@@ -3,6 +3,7 @@
 //  Horus
 //
 //  Created by Thomas Rodelli on 06/01/2026.
+//  Updated on 25/01/2026 - Added Add to Library keyboard shortcut.
 //
 
 import SwiftUI
@@ -20,10 +21,10 @@ struct HorusApp: App {
             MainWindowView()
                 .environment(appState)
                 .frame(
-                    minWidth: 700,
-                    idealWidth: 1000,
-                    minHeight: 500,
-                    idealHeight: 700
+                    minWidth: 1110,
+                    idealWidth: 1400,
+                    minHeight: 600,
+                    idealHeight: 800
                 )
                 .onAppear {
                     if !appState.hasAPIKey {
@@ -31,6 +32,7 @@ struct HorusApp: App {
                     }
                 }
         }
+        .defaultSize(width: 1400, height: 800)
         .commands {
             HorusCommands(appState: appState)
         }
@@ -71,7 +73,7 @@ struct HorusCommands: Commands {
             Divider()
             
             Button("Add Documents...") {
-                appState.selectedTab = .queue
+                appState.selectedTab = .input
                 NotificationCenter.default.post(name: .openFilePicker, object: nil)
             }
             .keyboardShortcut("o", modifiers: .command)
@@ -115,10 +117,10 @@ struct HorusCommands: Commands {
             Divider()
             
             Button("Clear Queue") {
-                appState.requestClearQueue()
+                appState.requestClearInput()
             }
             .keyboardShortcut(.delete, modifiers: [.command])
-            .disabled(appState.queueDocuments.isEmpty || appState.isProcessing)
+            .disabled(appState.inputDocuments.isEmpty || appState.isProcessing)
             
             Button("Clear Library") {
                 appState.requestClearLibrary()
@@ -131,19 +133,19 @@ struct HorusCommands: Commands {
         
         CommandMenu("Process") {
             Button("Process All") {
-                appState.selectedTab = .queue
+                appState.selectedTab = .ocr
                 appState.processAllDocuments()
             }
             .keyboardShortcut("r", modifiers: .command)
             .disabled(appState.session.pendingDocuments.isEmpty || !appState.hasAPIKey)
             
             Button("Process Selected") {
-                if let doc = appState.selectedQueueDocument, doc.canProcess {
+                if let doc = appState.selectedInputDocument, doc.canProcess {
                     appState.processSingleDocument(doc)
                 }
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
-            .disabled(appState.selectedQueueDocument?.canProcess != true || !appState.hasAPIKey)
+            .disabled(appState.selectedInputDocument?.canProcess != true || !appState.hasAPIKey)
             
             Divider()
             
@@ -171,25 +173,68 @@ struct HorusCommands: Commands {
             .disabled(appState.session.failedDocuments.isEmpty || !appState.hasAPIKey)
         }
         
+        // MARK: - Clean Menu
+        
+        CommandMenu("Clean") {
+            Button("Clean Selected Document...") {
+                appState.cleanSelectedDocument()
+            }
+            .keyboardShortcut("k", modifiers: .command)
+            .disabled(!appState.canCleanSelected || !appState.hasClaudeAPIKey)
+            
+            Divider()
+            
+            Text("Claude API: \(appState.hasClaudeAPIKey ? "Configured" : "Not Configured")")
+                .foregroundStyle(.secondary)
+            
+            if !appState.hasClaudeAPIKey {
+                Button("Configure Claude API...") {
+                    appState.selectedTab = .settings
+                }
+            }
+        }
+        
+        // MARK: - Library Menu
+        
+        CommandMenu("Library") {
+            Button("Add to Library") {
+                appState.addSelectedToLibrary()
+            }
+            .keyboardShortcut("l", modifiers: .command)
+            .disabled(!appState.canAddSelectedToLibrary)
+            
+            Divider()
+            
+            Button("Go to Library") {
+                appState.selectedTab = .library
+            }
+            .keyboardShortcut("3", modifiers: .command)
+        }
+        
         // MARK: - View Menu
         
         CommandGroup(after: .sidebar) {
             Divider()
             
-            Button("Queue") {
-                appState.selectedTab = .queue
+            Button("Input") {
+                appState.selectedTab = .input
             }
             .keyboardShortcut("1", modifiers: .command)
+            
+            Button("OCR") {
+                appState.selectedTab = .ocr
+            }
+            .keyboardShortcut("2", modifiers: .command)
             
             Button("Library") {
                 appState.selectedTab = .library
             }
-            .keyboardShortcut("2", modifiers: .command)
+            .keyboardShortcut("3", modifiers: .command)
             
             Button("Settings") {
                 appState.selectedTab = .settings
             }
-            .keyboardShortcut("3", modifiers: .command)
+            .keyboardShortcut("4", modifiers: .command)
         }
         
         // MARK: - Help Menu
@@ -212,6 +257,14 @@ struct HorusCommands: Commands {
             
             Link("API Pricing",
                  destination: URL(string: "https://mistral.ai/products/la-plateforme#pricing")!)
+            
+            Divider()
+            
+            Link("Anthropic Claude Documentation",
+                 destination: URL(string: "https://docs.anthropic.com")!)
+            
+            Link("Anthropic Console",
+                 destination: URL(string: "https://console.anthropic.com")!)
         }
     }
     
@@ -219,10 +272,12 @@ struct HorusCommands: Commands {
     
     private var canDeleteSelected: Bool {
         switch appState.selectedTab {
-        case .queue:
-            return appState.selectedQueueDocument != nil
+        case .input, .ocr:
+            return appState.selectedInputDocument != nil
         case .library:
             return appState.selectedLibraryDocument != nil
+        case .clean:
+            return appState.selectedCleanDocument != nil
         case .settings:
             return false
         }

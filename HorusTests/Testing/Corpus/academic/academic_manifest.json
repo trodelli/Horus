@@ -1,0 +1,16 @@
+{
+    "documentName": "The Cognitive Impact of Digital Reading Interfaces",
+    "contentType": "academic",
+    "description": "Sample academic paper with citations, footnotes, and formal structure for testing academic content handling",
+    "sourceAttribution": "Created for Horus testing - representative of academic style",
+    "wordCount": 2847,
+    "expectedPatterns": {
+        "citations": true,
+        "footnotes": true,
+        "chapterHeadings": false,
+        "pageNumbers": true,
+        "abstractSection": true,
+        "bibliography": true
+    },
+    "testObjective": "Validate citation preservation, footnote handling, section boundary detection, and formal structure recognition"
+}

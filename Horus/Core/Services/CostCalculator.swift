@@ -56,7 +56,7 @@ final class CostCalculator: CostCalculatorProtocol {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = "USD"
-        formatter.currencySymbol = "$"
+        formatter.locale = Locale(identifier: "en_US")  // Use consistent US locale
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 4
         return formatter
@@ -67,7 +67,7 @@ final class CostCalculator: CostCalculatorProtocol {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = "USD"
-        formatter.currencySymbol = "$"
+        formatter.locale = Locale(identifier: "en_US")  // Use consistent US locale
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter

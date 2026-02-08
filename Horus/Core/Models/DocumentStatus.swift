@@ -88,7 +88,7 @@ enum DocumentStatus: Equatable, Hashable {
     var color: Color {
         switch self {
         case .pending:
-            return .secondary
+            return .orange
         case .validating:
             return .secondary
         case .processing:

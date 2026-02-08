@@ -22,7 +22,7 @@ struct ExportSheetView: View {
     
     // MARK: - State
     
-    @State private var showPreview: Bool = false
+    // (showPreview removed - preview feature removed for cleaner UX)
     
     // MARK: - Body
     
@@ -35,7 +35,7 @@ struct ExportSheetView: View {
             
             // Content
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 24) {
                     // Document info
                     documentInfoSection
                     
@@ -48,12 +48,6 @@ struct ExportSheetView: View {
                     
                     // Options
                     optionsSection
-                    
-                    // Preview toggle
-                    if showPreview {
-                        Divider()
-                        previewSection
-                    }
                 }
                 .padding(20)
             }
@@ -63,7 +57,7 @@ struct ExportSheetView: View {
             // Footer with buttons
             footer
         }
-        .frame(width: 480, height: showPreview ? 600 : 540)
+        .frame(width: 480, height: 540)
     }
     
     // MARK: - Header
@@ -149,6 +143,13 @@ struct ExportSheetView: View {
                 Toggle("Include processing time", isOn: $viewModel.includeProcessingTime)
                     .disabled(!viewModel.includeMetadata)
                 
+                // Cleaning report toggle - disabled for non-cleaned documents
+                Toggle("Include cleaning report", isOn: $viewModel.includeCleaningReport)
+                    .disabled(document.cleanedContent == nil)
+                    .help(document.cleanedContent != nil
+                        ? "Appends detailed pipeline metrics to exported file"
+                        : "Document has not been cleaned")
+                
                 if viewModel.selectedFormats.contains(.markdown) {
                     Toggle("Include YAML front matter", isOn: $viewModel.includeFrontMatter)
                         .disabled(!viewModel.includeMetadata)
@@ -162,42 +163,10 @@ struct ExportSheetView: View {
         }
     }
     
-    // MARK: - Preview Section
-    
-    private var previewSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Preview", systemImage: "eye")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-            
-            ScrollView {
-                Text(viewModel.previewContent(for: document, maxLength: 1500) ?? "No preview available")
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(height: 150)
-            .padding(8)
-            .background(Color(.textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color(.separatorColor), lineWidth: 1)
-            )
-        }
-    }
-    
     // MARK: - Footer
     
     private var footer: some View {
         HStack {
-            Button {
-                showPreview.toggle()
-            } label: {
-                Label(showPreview ? "Hide Preview" : "Show Preview", systemImage: showPreview ? "eye.slash" : "eye")
-            }
-            .buttonStyle(.borderless)
-            
             Spacer()
             
             Button("Cancel") {
@@ -273,6 +242,7 @@ struct FormatCheckboxRow: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? Color.blue.opacity(0.5) : Color(.separatorColor), lineWidth: 1)
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

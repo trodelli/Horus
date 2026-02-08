@@ -1,0 +1,17 @@
+{
+    "documentName": "User Manual: TideWatch Pro Maritime Navigation System",
+    "contentType": "mixed",
+    "description": "Mixed content document combining technical specifications, user instructions, and procedural text",
+    "sourceAttribution": "Created for Horus testing - demonstrates mixed content handling",
+    "wordCount": 1523,
+    "expectedPatterns": {
+        "citations": false,
+        "footnotes": true,
+        "chapterHeadings": true,
+        "pageNumbers": true,
+        "tables": true,
+        "bulletedLists": true,
+        "codeBlocks": false
+    },
+    "testObjective": "Validate adaptive handling of multiple content styles within single document (technical, instructional, procedural)"
+}

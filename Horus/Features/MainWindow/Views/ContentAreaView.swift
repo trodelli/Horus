@@ -26,10 +26,14 @@ struct ContentAreaView: View {
     /// The currently displayed document based on selected tab
     private var currentDocument: Document? {
         switch appState.selectedTab {
-        case .queue:
-            return appState.selectedQueueDocument
+        case .input:
+            return appState.selectedInputDocument
+        case .ocr:
+            return appState.selectedLibraryDocument
         case .library:
             return appState.selectedLibraryDocument
+        case .clean:
+            return appState.selectedCleanDocument
         case .settings:
             return nil
         }
@@ -351,7 +355,6 @@ struct ContentAreaView: View {
                     Menu {
                         ForEach(ExportFormat.allCases) { format in
                             Button {
-                                appState.exportViewModel.selectedFormat = format
                                 copyToClipboard(document: document, format: format)
                             } label: {
                                 Label(format.displayName, systemImage: format.symbolName)
@@ -474,7 +477,6 @@ struct ContentAreaView: View {
     }
     
     private func copyToClipboard(document: Document, format: ExportFormat) {
-        appState.exportViewModel.selectedFormat = format
         appState.exportViewModel.copyToClipboard(document, format: format)
     }
 }

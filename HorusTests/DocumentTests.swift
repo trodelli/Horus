@@ -252,18 +252,21 @@ final class DocumentStatusTests: XCTestCase {
 final class ProcessingProgressTests: XCTestCase {
     
     func testPercentComplete() {
-        let progress = ProcessingProgress(currentPage: 5, totalPages: 10)
-        XCTAssertEqual(progress.percentComplete, 0.5, accuracy: 0.001)
+        // Progress is phase-based. With .processing phase and 5/10 pages:
+        // 0.3 + (0.5 * 0.6) = 0.3 + 0.3 = 0.6 (60%)
+        let progress = ProcessingProgress(phase: .processing, totalPages: 10, currentPage: 5)
+        XCTAssertEqual(progress.percentComplete, 0.6, accuracy: 0.001)
     }
     
     func testPercentCompleteWithZeroPages() {
-        let progress = ProcessingProgress(currentPage: 0, totalPages: 0)
-        XCTAssertEqual(progress.percentComplete, 0)
+        // Default phase is .preparing which returns 0.1 (10%)
+        let progress = ProcessingProgress(totalPages: 0, currentPage: 0)
+        XCTAssertEqual(progress.percentComplete, 0.1, accuracy: 0.001)
     }
     
     func testElapsedTime() {
         let startTime = Date().addingTimeInterval(-5) // 5 seconds ago
-        let progress = ProcessingProgress(currentPage: 1, totalPages: 10, startedAt: startTime)
+        let progress = ProcessingProgress(totalPages: 10, currentPage: 1, startedAt: startTime)
         
         XCTAssertGreaterThanOrEqual(progress.elapsedTime, 5)
         XCTAssertLessThan(progress.elapsedTime, 6)
@@ -271,19 +274,21 @@ final class ProcessingProgressTests: XCTestCase {
     
     func testEstimatedTimeRemaining() {
         let startTime = Date().addingTimeInterval(-10) // 10 seconds ago
-        let progress = ProcessingProgress(currentPage: 5, totalPages: 10, startedAt: startTime)
+        // Use .processing phase and progress beyond 10% threshold
+        let progress = ProcessingProgress(phase: .processing, totalPages: 10, currentPage: 5, startedAt: startTime)
         
-        // Should estimate ~10 more seconds (2 sec/page × 5 remaining pages)
+        // Progress is 60% (0.6), so: totalEstimated = 10 / 0.6 ≈ 16.67s
+        // Remaining = 16.67 - 10 ≈ 6.67s
         if let remaining = progress.estimatedTimeRemaining {
-            XCTAssertGreaterThan(remaining, 8)
-            XCTAssertLessThan(remaining, 12)
+            XCTAssertGreaterThan(remaining, 5)
+            XCTAssertLessThan(remaining, 8)
         } else {
             XCTFail("Expected estimated time remaining")
         }
     }
     
     func testEstimatedTimeRemainingNilAtStart() {
-        let progress = ProcessingProgress(currentPage: 0, totalPages: 10)
+        let progress = ProcessingProgress(totalPages: 10, currentPage: 0)
         XCTAssertNil(progress.estimatedTimeRemaining)
     }
 }

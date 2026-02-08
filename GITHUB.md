@@ -2,6 +2,8 @@
 
 This guide walks you through publishing Horus to GitHub, creating releases, and managing the repository.
 
+---
+
 ## Table of Contents
 
 1. [Initial Setup](#initial-setup)
@@ -55,13 +57,13 @@ pbcopy < ~/.ssh/id_ed25519.pub
 ```
 
 Then add to GitHub:
-1. Go to GitHub.com > Settings > SSH and GPG keys
+1. Go to GitHub.com → Settings → SSH and GPG keys
 2. Click "New SSH key"
 3. Paste your key and save
 
 #### Option B: Personal Access Token
 
-1. Go to GitHub.com > Settings > Developer settings > Personal access tokens
+1. Go to GitHub.com → Settings → Developer settings → Personal access tokens
 2. Generate new token (classic) with `repo` scope
 3. Save the token securely
 
@@ -71,16 +73,15 @@ Then add to GitHub:
 
 ### Option 1: Create on GitHub First (Recommended)
 
-1. **Go to GitHub.com**
-2. **Click "New repository"** (+ icon in top right)
-3. **Fill in details:**
-   - Repository name: `horus`
-   - Description: `Native macOS OCR app powered by Mistral AI`
+1. Go to [github.com/new](https://github.com/new)
+2. Fill in details:
+   - Repository name: `Horus`
+   - Description: `Native macOS document processing app powered by Mistral OCR and Claude`
    - Visibility: Public (or Private)
    - **Do NOT** initialize with README (we have one)
    - **Do NOT** add .gitignore (we have one)
    - **Do NOT** add license (we have one)
-4. **Click "Create repository"**
+3. Click "Create repository"
 
 ### Option 2: Using GitHub CLI
 
@@ -92,7 +93,7 @@ brew install gh
 gh auth login
 
 # Create repository
-gh repo create horus --public --description "Native macOS OCR app powered by Mistral AI"
+gh repo create Horus --public --description "Native macOS document processing app powered by Mistral OCR and Claude"
 ```
 
 ---
@@ -111,13 +112,14 @@ git init
 git add .
 
 # Create initial commit
-git commit -m "Initial commit: Horus v1.0.0
+git commit -m "Initial commit: Horus v3.0.0
 
-- Tab-based navigation (Queue, Library, Settings)
-- Batch OCR processing with Mistral AI
-- Real-time progress with elapsed time and speed metrics
-- Document management with delete/clear actions
-- Export to Markdown, JSON, and plain text
+- Dual-API architecture: Mistral OCR + Claude cleaning
+- V3 Evolved Cleaning Pipeline with 16 steps
+- Tab-based navigation (Input, OCR, Clean, Library, Settings)
+- Processing presets: Default, Training, Minimal, Scholarly
+- Content type detection (13 document types)
+- Multi-format export (Markdown, JSON, plain text)
 - Secure API key storage in Keychain"
 ```
 
@@ -127,10 +129,10 @@ Replace `yourusername` with your GitHub username:
 
 ```bash
 # Add remote (SSH)
-git remote add origin git@github.com:yourusername/horus.git
+git remote add origin git@github.com:yourusername/Horus.git
 
 # OR add remote (HTTPS)
-git remote add origin https://github.com/yourusername/horus.git
+git remote add origin https://github.com/yourusername/Horus.git
 
 # Verify remote
 git remote -v
@@ -146,7 +148,7 @@ git push -u origin main
 
 ### 4. Verify Upload
 
-Visit `https://github.com/yourusername/horus` to see your repository.
+Visit `https://github.com/yourusername/Horus` to see your repository.
 
 ---
 
@@ -154,22 +156,28 @@ Visit `https://github.com/yourusername/horus` to see your repository.
 
 ### 1. Build the App
 
-Follow [BUILDING.md](BUILDING.md) to create the DMG:
+Build a release version in Xcode:
+
+1. Open `Horus.xcodeproj`
+2. Select **Product → Archive**
+3. In the Organizer, click **Distribute App**
+4. Choose **Copy App** to export the `.app` bundle
+
+Then create the DMG:
 
 ```bash
-# Quick summary
-xcodebuild -project Horus.xcodeproj -scheme Horus -configuration Release build
-# Then create DMG as described in BUILDING.md
+# Create DMG (using create-dmg or hdiutil)
+hdiutil create -volname "Horus" -srcfolder /path/to/Horus.app -ov -format UDZO Horus-3.0.0.dmg
 ```
 
 ### 2. Create Git Tag
 
 ```bash
 # Create annotated tag
-git tag -a v1.0.0 -m "Version 1.0.0 - Initial Release"
+git tag -a v3.0.0 -m "Version 3.0.0 - Intelligent Content Cleaning"
 
 # Push tag to GitHub
-git push origin v1.0.0
+git push origin v3.0.0
 ```
 
 ### 3. Create GitHub Release
@@ -177,93 +185,81 @@ git push origin v1.0.0
 #### Option A: Web Interface
 
 1. Go to your repository on GitHub
-2. Click "Releases" (right sidebar)
-3. Click "Create a new release"
+2. Click **Releases** (right sidebar)
+3. Click **Create a new release**
 4. Fill in:
-   - **Tag**: Select `v1.0.0`
-   - **Title**: `Horus v1.0.0`
-   - **Description**: (see template below)
-5. **Attach DMG file**: Drag `Horus-1.0.0.dmg` to upload area
-6. Click "Publish release"
+   - **Tag**: Select `v3.0.0`
+   - **Title**: `Horus v3.0.0`
+   - **Description**: Copy from `RELEASE_NOTES.md`
+5. Attach DMG file: Drag `Horus-3.0.0.dmg` to upload area
+6. Click **Publish release**
 
 #### Option B: GitHub CLI
 
 ```bash
-gh release create v1.0.0 \
-    --title "Horus v1.0.0" \
+gh release create v3.0.0 \
+    --title "Horus v3.0.0" \
     --notes-file RELEASE_NOTES.md \
-    ./Release/Horus-1.0.0.dmg
-```
-
-### Release Notes Template
-
-Create `RELEASE_NOTES.md`:
-
-```markdown
-# Horus v1.0.0
-
-🎉 **Initial Release** of Horus - Native macOS OCR powered by Mistral AI
-
-## Installation
-
-1. Download `Horus-1.0.0.dmg` below
-2. Open the DMG and drag Horus to Applications
-3. Launch Horus and enter your [Mistral API key](https://console.mistral.ai)
-
-> **Note**: On first launch, macOS may show a security warning. Go to System Settings > Privacy & Security and click "Open Anyway".
-
-## Features
-
-- ✅ Batch document processing (PDF, PNG, JPEG, TIFF, GIF, WebP)
-- ✅ Real-time progress with elapsed time and processing speed
-- ✅ Tab-based navigation (Queue, Library, Settings)
-- ✅ Rendered markdown preview
-- ✅ Export to Markdown, JSON, plain text
-- ✅ Document management with delete/clear actions
-- ✅ Rich tooltips with file details
-- ✅ Secure API key storage in Keychain
-- ✅ Cost estimation and tracking
-
-## Requirements
-
-- macOS 14.0 (Sonoma) or later
-- Mistral AI API key
-
-## Keyboard Shortcuts
-
-| Action | Shortcut |
-|--------|----------|
-| Add Documents | ⌘O |
-| Process All | ⌘R |
-| Export | ⌘E |
-| Delete | ⌫ |
-
-See [README](https://github.com/yourusername/horus#keyboard-shortcuts) for full list.
-
----
-
-**Full Changelog**: https://github.com/yourusername/horus/blob/main/CHANGELOG.md
+    ./Horus-3.0.0.dmg
 ```
 
 ---
 
 ## Managing the Repository
 
-### Adding Screenshots
+### Repository Structure
 
-Create a `Screenshots` folder and add images:
-
-```bash
-mkdir -p Screenshots
-# Add your screenshots: horus-queue.png, horus-library.png, etc.
-git add Screenshots/
-git commit -m "Add screenshots for README"
-git push
+```
+Horus/
+├── .gitignore              # Ignore build artifacts
+├── LICENSE                 # MIT License
+├── README.md               # Main documentation
+├── CHANGELOG.md            # Version history
+├── RELEASE_NOTES.md        # Current release notes
+├── GITHUB.md               # This file
+├── Documentation/          # Detailed project docs
+│   └── Foundational Documents/
+│       ├── 01-PRD-Horus.md
+│       ├── 02-Technical-Architecture-Horus.md
+│       └── ...
+├── Screenshots/            # App screenshots
+│   ├── Input.jpg
+│   ├── OCR Processed.jpg
+│   ├── CLEAN - Processing.jpg
+│   ├── CLEAN Processing Complete.jpg
+│   ├── Library.jpg
+│   ├── Export.jpg
+│   └── Settings.jpg
+├── Icon/                   # App icons
+├── Horus.xcodeproj/        # Xcode project
+├── Horus/                  # Source code
+│   ├── App/
+│   ├── Core/
+│   │   ├── Models/
+│   │   ├── Services/
+│   │   │   └── EvolvedCleaning/
+│   │   ├── Errors/
+│   │   └── Utilities/
+│   ├── Features/
+│   │   ├── DocumentQueue/
+│   │   ├── OCR/
+│   │   ├── Cleaning/
+│   │   ├── Library/
+│   │   ├── Export/
+│   │   └── Settings/
+│   ├── Shared/
+│   └── Resources/
+├── HorusTests/             # Unit tests
+└── HorusUITests/           # UI tests
 ```
 
-### Updating the README
+### Updating Screenshots
 
-After adding screenshots, update image paths in README.md if needed.
+When updating screenshots:
+
+1. Take screenshots at consistent window sizes
+2. Use descriptive filenames (spaces are fine; they URL-encode)
+3. Reference in README with URL encoding: `Screenshots/CLEAN%20Processing%20Complete.jpg`
 
 ### Future Updates
 
@@ -279,54 +275,33 @@ git commit -m "Description of changes"
 git push
 
 # For new releases, create new tag
-git tag -a v1.1.0 -m "Version 1.1.0 - New features"
-git push origin v1.1.0
+git tag -a v3.1.0 -m "Version 3.1.0 - Description"
+git push origin v3.1.0
 ```
 
 ---
 
 ## Best Practices
 
-### Repository Structure
-
-```
-horus/
-├── .gitignore          # Ignore build artifacts
-├── LICENSE             # MIT License
-├── README.md           # Main documentation
-├── CHANGELOG.md        # Version history
-├── BUILDING.md         # Build instructions
-├── GITHUB.md           # This file
-├── Screenshots/        # App screenshots
-│   ├── horus-queue.png
-│   └── horus-library.png
-├── Horus.xcodeproj/    # Xcode project
-└── Horus/              # Source code
-    ├── App/
-    ├── Core/
-    ├── Features/
-    └── Resources/
-```
-
 ### Commit Message Guidelines
 
 Use clear, descriptive commit messages:
 
 ```
-feat: Add document tooltip with file details
-fix: Resolve Table sort order crash
+feat: Add confidence threshold configuration
+fix: Resolve cleaning progress bar display issue
 docs: Update README with new screenshots
-refactor: Simplify ProcessingViewModel state
+refactor: Extract boundary detection into separate service
 style: Format code according to Swift guidelines
-test: Add unit tests for CostCalculator
+test: Add unit tests for CleaningConfiguration
 ```
 
 ### Branch Strategy
 
-- `main` - Stable release code
-- `develop` - Development branch (optional)
-- `feature/*` - Feature branches
-- `fix/*` - Bug fix branches
+- `main` — Stable release code
+- `develop` — Development branch (optional)
+- `feature/*` — Feature branches
+- `fix/*` — Bug fix branches
 
 ### Security
 
@@ -340,12 +315,11 @@ The `.gitignore` file is configured to exclude these.
 
 ### Tagging Versions
 
-Use semantic versioning:
+Use semantic versioning: `vMAJOR.MINOR.PATCH`
 
-- `v1.0.0` - Major.Minor.Patch
-- `v1.0.1` - Bug fixes
-- `v1.1.0` - New features (backward compatible)
-- `v2.0.0` - Breaking changes
+- `v3.0.0` — Major release (breaking changes, new features)
+- `v3.1.0` — Minor release (new features, backward compatible)
+- `v3.0.1` — Patch release (bug fixes)
 
 ---
 
@@ -374,24 +348,24 @@ git push
 git pull
 
 # Create tag
-git tag -a v1.0.0 -m "Version 1.0.0"
-git push origin v1.0.0
+git tag -a v3.0.0 -m "Version 3.0.0"
+git push origin v3.0.0
 ```
 
 ### GitHub CLI Commands
 
 ```bash
 # Create release
-gh release create v1.0.0 ./Horus-1.0.0.dmg
+gh release create v3.0.0 ./Horus-3.0.0.dmg
 
 # List releases
 gh release list
 
 # View release
-gh release view v1.0.0
+gh release view v3.0.0
 
-# Delete release
-gh release delete v1.0.0
+# Delete release (use with caution)
+gh release delete v3.0.0
 ```
 
 ---
@@ -407,7 +381,7 @@ SSH key not configured. See [Initial Setup](#initial-setup).
 Check the remote URL:
 ```bash
 git remote -v
-git remote set-url origin git@github.com:yourusername/horus.git
+git remote set-url origin git@github.com:yourusername/Horus.git
 ```
 
 ### Large file errors
@@ -440,9 +414,11 @@ git commit -m "Resolve merge conflicts"
 - [ ] SSH key or token set up
 - [ ] Repository created on GitHub
 - [ ] Code pushed to main branch
-- [ ] Screenshots added
+- [ ] Screenshots added and referenced in README
 - [ ] DMG built and tested
 - [ ] Release created with DMG attached
 - [ ] README displays correctly on GitHub
 
-🎉 **Congratulations!** Your app is now published on GitHub!
+---
+
+**Repository:** https://github.com/trodelli/Horus

@@ -70,13 +70,14 @@ struct OCRResult: Equatable, Hashable, Codable {
         pages.contains { !$0.images.isEmpty }
     }
     
-    /// Formatted cost for display (e.g., "$0.012")
+    /// Formatted cost for display (e.g., "$0.01")
     var formattedCost: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = "USD"
+        formatter.locale = Locale(identifier: "en_US")  // Use consistent US locale
         formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 4
+        formatter.maximumFractionDigits = 4  // Allow up to 4 decimals for small costs
         return formatter.string(from: cost as NSDecimalNumber) ?? "$\(cost)"
     }
     

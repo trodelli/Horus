@@ -1,0 +1,16 @@
+{
+    "documentName": "The Last Lighthouse Keeper - Chapter 3",
+    "contentType": "proseFiction",
+    "description": "Fiction excerpt with dialogue, chapter structure, and narrative flow for testing prose fiction handling",
+    "sourceAttribution": "Created for Horus testing - representative of fiction style",
+    "wordCount": 1842,
+    "expectedPatterns": {
+        "citations": false,
+        "footnotes": false,
+        "chapterHeadings": true,
+        "pageNumbers": false,
+        "dialogue": true,
+        "narrativeStructure": true
+    },
+    "testObjective": "Validate dialogue formatting, paragraph reflow for narrative prose, and chapter boundary detection"
+}

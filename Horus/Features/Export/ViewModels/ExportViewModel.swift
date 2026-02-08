@@ -54,6 +54,9 @@ final class ExportViewModel {
     /// Whether to pretty-print JSON
     var prettyPrintJSON: Bool = true
     
+    /// Whether to include cleaning report (Markdown)
+    var includeCleaningReport: Bool = true
+    
     // MARK: - Computed Properties
     
     /// Current export configuration for a specific format
@@ -64,7 +67,8 @@ final class ExportViewModel {
             includeCost: includeCost,
             includeProcessingTime: includeProcessingTime,
             prettyPrint: prettyPrintJSON,
-            includeFrontMatter: includeFrontMatter
+            includeFrontMatter: includeFrontMatter,
+            includeCleaningReport: includeCleaningReport
         )
     }
     
@@ -408,6 +412,7 @@ final class ExportViewModel {
         includeProcessingTime = defaults.includeProcessingTime
         includeFrontMatter = defaults.includeFrontMatter
         prettyPrintJSON = defaults.prettyPrint
+        includeCleaningReport = defaults.includeCleaningReport
     }
 }
 

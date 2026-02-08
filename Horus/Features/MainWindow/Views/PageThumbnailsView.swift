@@ -30,6 +30,10 @@ struct PageThumbnailsView: View {
     
     @StateObject private var thumbnailCache = ThumbnailCache()
     
+    // Track scroll velocity for smart prefetch
+    @State private var lastPageChange: Date = Date()
+    @State private var scrollVelocity: ScrollVelocity = .stationary
+    
     // MARK: - Body
     
     var body: some View {
@@ -100,15 +104,37 @@ struct PageThumbnailsView: View {
                 }
                 .padding(.vertical, 4)
             }
-            .onChange(of: selectedPage) { _, newPage in
+            .onChange(of: selectedPage) { oldPage, newPage in
+                // Detect scroll velocity
+                let now = Date()
+                let timeSinceLastChange = now.timeIntervalSince(lastPageChange)
+                lastPageChange = now
+                
+                // Calculate velocity (pages per second)
+                let pagesDelta = abs(newPage - oldPage)
+                let velocity = timeSinceLastChange > 0 ? Double(pagesDelta) / timeSinceLastChange : 0
+                
+                // Update scroll velocity state
+                if velocity > 5.0 {
+                    scrollVelocity = .fast
+                } else if velocity > 1.0 {
+                    scrollVelocity = .normal
+                } else {
+                    scrollVelocity = .stationary
+                }
+                
                 // Scroll to selected page with animation
                 withAnimation(.easeInOut(duration: 0.2)) {
                     scrollProxy.scrollTo(newPage, anchor: .center)
                 }
-                // Prefetch thumbnails around the new selection
-                thumbnailCache.prefetch(for: documentURL, around: newPage)
+                
+                // Dynamic prefetch based on velocity
+                let buffer = scrollVelocity.prefetchBuffer
+                thumbnailCache.prefetch(for: documentURL, around: newPage, buffer: buffer)
             }
             .onAppear {
+                // Set page count for smart tiering
+                thumbnailCache.setPageCount(pageCount, for: documentURL)
                 // Initial prefetch around first page
                 thumbnailCache.prefetch(for: documentURL, around: 0)
             }
@@ -127,33 +153,36 @@ struct PageThumbnailItem: View {
     
     @ObservedObject var thumbnailCache: ThumbnailCache
     
+    // Track when thumbnail first appears for smooth transition
+    @State private var thumbnailDidAppear = false
+    
     var body: some View {
-        VStack(spacing: 4) {
-            // Thumbnail or placeholder
+        VStack(spacing: 8) {
+            // Thumbnail or placeholder - larger size to match Input tab
             thumbnailView
-                .frame(width: 70, height: 90)
+                .frame(width: 280, height: 360)
                 .background(Color.white)
-                .cornerRadius(4)
+                .cornerRadius(8)
                 .shadow(color: isSelected ? .accentColor.opacity(0.4) : .black.opacity(0.1), 
-                       radius: isSelected ? 4 : 2, 
+                       radius: isSelected ? 6 : 3, 
                        x: 0, 
-                       y: 1)
+                       y: 2)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 4)
+                    RoundedRectangle(cornerRadius: 8)
                         .stroke(isSelected ? Color.accentColor : Color(nsColor: .separatorColor), 
-                               lineWidth: isSelected ? 2 : 0.5)
+                               lineWidth: isSelected ? 2.5 : 0.5)
                 )
             
             // Page number
             Text("\(pageIndex + 1)")
-                .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                 .foregroundStyle(isSelected ? .primary : .secondary)
                 .monospacedDigit()
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 2)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
-        .cornerRadius(6)
+        .cornerRadius(10)
         .onAppear {
             // Request thumbnail when item appears
             thumbnailCache.requestThumbnail(for: documentURL, pageIndex: pageIndex)
@@ -166,6 +195,13 @@ struct PageThumbnailItem: View {
             Image(nsImage: thumbnail)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
+                .opacity(thumbnailDidAppear ? 1.0 : 0.0)
+                .animation(.easeIn(duration: 0.15), value: thumbnailDidAppear)
+                .onAppear {
+                    withAnimation(.easeIn(duration: 0.15)) {
+                        thumbnailDidAppear = true
+                    }
+                }
         } else {
             // Placeholder while loading
             placeholderView
@@ -174,15 +210,17 @@ struct PageThumbnailItem: View {
     
     private var placeholderView: some View {
         ZStack {
+            // Base background
             Color(nsColor: .controlBackgroundColor)
             
-            VStack(spacing: 4) {
-                ProgressView()
-                    .scaleEffect(0.5)
-                Text("\(pageIndex + 1)")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.tertiary)
-            }
+            // Shimmer effect overlay
+            ShimmerView()
+            
+            // Page number centered
+            Text("\(pageIndex + 1)")
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(.tertiary)
+                .opacity(0.4)
         }
     }
 }
@@ -201,6 +239,9 @@ struct PageThumbnailsStripView: View {
         maxCacheSize: 50,
         thumbnailSize: CGSize(width: 50, height: 65)
     )
+    
+    @State private var lastPageChange: Date = Date()
+    @State private var scrollVelocity: ScrollVelocity = .stationary
     
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -223,11 +264,33 @@ struct PageThumbnailsStripView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
             }
-            .onChange(of: selectedPage) { _, newPage in
+            .onChange(of: selectedPage) { oldPage, newPage in
+                // Detect scroll velocity
+                let now = Date()
+                let timeSinceLastChange = now.timeIntervalSince(lastPageChange)
+                lastPageChange = now
+                
+                let pagesDelta = abs(newPage - oldPage)
+                let velocity = timeSinceLastChange > 0 ? Double(pagesDelta) / timeSinceLastChange : 0
+                
+                if velocity > 5.0 {
+                    scrollVelocity = .fast
+                } else if velocity > 1.0 {
+                    scrollVelocity = .normal
+                } else {
+                    scrollVelocity = .stationary
+                }
+                
                 withAnimation(.easeInOut(duration: 0.2)) {
                     scrollProxy.scrollTo(newPage, anchor: .center)
                 }
-                thumbnailCache.prefetch(for: documentURL, around: newPage)
+                
+                let buffer = scrollVelocity.prefetchBuffer
+                thumbnailCache.prefetch(for: documentURL, around: newPage, buffer: buffer)
+            }
+            .onAppear {
+                // Set page count for smart tiering
+                thumbnailCache.setPageCount(pageCount, for: documentURL)
             }
         }
         .frame(height: 80)
@@ -243,6 +306,8 @@ private struct SmallPageThumbnail: View {
     let isSelected: Bool
     @ObservedObject var thumbnailCache: ThumbnailCache
     
+    @State private var thumbnailDidAppear = false
+    
     var body: some View {
         VStack(spacing: 2) {
             Group {
@@ -250,13 +315,22 @@ private struct SmallPageThumbnail: View {
                     Image(nsImage: thumbnail)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                } else {
-                    Color(nsColor: .controlBackgroundColor)
-                        .overlay {
-                            Text("\(pageIndex + 1)")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.tertiary)
+                        .opacity(thumbnailDidAppear ? 1.0 : 0.0)
+                        .animation(.easeIn(duration: 0.15), value: thumbnailDidAppear)
+                        .onAppear {
+                            withAnimation(.easeIn(duration: 0.15)) {
+                                thumbnailDidAppear = true
+                            }
                         }
+                } else {
+                    ZStack {
+                        Color(nsColor: .controlBackgroundColor)
+                        ShimmerView()
+                        Text("\(pageIndex + 1)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                            .opacity(0.4)
+                    }
                 }
             }
             .frame(width: 50, height: 65)
@@ -270,6 +344,63 @@ private struct SmallPageThumbnail: View {
         .onAppear {
             thumbnailCache.requestThumbnail(for: documentURL, pageIndex: pageIndex)
         }
+    }
+}
+
+// MARK: - Scroll Velocity
+
+/// Scroll velocity classification for adaptive prefetch.
+enum ScrollVelocity {
+    case stationary  // Not scrolling or very slow
+    case normal      // Regular scrolling pace
+    case fast        // Rapid scrolling
+    
+    /// Prefetch buffer size based on scroll velocity
+    var prefetchBuffer: Int {
+        switch self {
+        case .stationary:
+            return 3  // Minimal buffer, focus on upgrading visible
+        case .normal:
+            return 5  // Standard buffer
+        case .fast:
+            return 8  // Extended buffer to anticipate scroll destination
+        }
+    }
+}
+
+// MARK: - Shimmer Effect
+
+/// Modern shimmer loading effect matching macOS design language.
+/// Creates a subtle animated gradient that sweeps across the placeholder.
+struct ShimmerView: View {
+    
+    @State private var phase: CGFloat = 0
+    
+    var body: some View {
+        GeometryReader { geometry in
+            LinearGradient(
+                gradient: Gradient(stops: [
+                    .init(color: Color.white.opacity(0.0), location: 0.0),
+                    .init(color: Color.white.opacity(0.1), location: 0.4),
+                    .init(color: Color.white.opacity(0.15), location: 0.5),
+                    .init(color: Color.white.opacity(0.1), location: 0.6),
+                    .init(color: Color.white.opacity(0.0), location: 1.0)
+                ]),
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: geometry.size.width * 2)
+            .offset(x: -geometry.size.width + (geometry.size.width * 2 * phase))
+            .onAppear {
+                withAnimation(
+                    .linear(duration: 1.5)
+                    .repeatForever(autoreverses: false)
+                ) {
+                    phase = 1.0
+                }
+            }
+        }
+        .clipped()
     }
 }
 

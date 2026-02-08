@@ -67,6 +67,59 @@ struct UserPreferences: Codable, Equatable {
     /// Preferred preview mode
     var previewMode: PreviewMode = .rendered
     
+    // MARK: - Cleaning Settings
+    
+    /// Default cleaning configuration preset (string for backward compatibility)
+    var defaultCleaningPreset: String = "default"
+    
+    /// Default max words per paragraph for cleaning
+    var cleaningMaxParagraphWords: Int = 250
+    
+    /// Default metadata format for cleaned documents
+    var cleaningMetadataFormat: String = "yaml"
+    
+    /// Whether to auto-start cleaning after OCR completes
+    var autoCleanAfterOCR: Bool = false
+    
+    /// Whether to show cleaning preview panel by default
+    var showCleaningPreview: Bool = true
+    
+    // MARK: - Cleaning Toggleable Steps (V2)
+    
+    /// Default state for Step 4: Remove Auxiliary Lists
+    var cleaningRemoveAuxiliaryLists: Bool = false
+    
+    /// Default state for Step 9: Remove Citations
+    var cleaningRemoveCitations: Bool = false
+    
+    /// Default state for Step 10: Remove Footnotes/Endnotes
+    var cleaningRemoveFootnotesEndnotes: Bool = false
+    
+    // MARK: - Cleaning Structure Settings (V2)
+    
+    /// Default chapter marker style
+    var cleaningChapterMarkerStyle: String = "htmlComments"
+    
+    /// Default end marker style
+    var cleaningEndMarkerStyle: String = "standard"
+    
+    /// Whether chapter segmentation is enabled
+    var cleaningEnableChapterSegmentation: Bool = true
+    
+    // MARK: - Cleaning Content Type Settings (V2)
+    
+    /// Whether to respect content type flags
+    var cleaningRespectContentTypeFlags: Bool = true
+    
+    /// Whether to adjust paragraph length for children's content
+    var cleaningAdjustForChildrens: Bool = true
+    
+    /// Whether to preserve code blocks
+    var cleaningPreserveCodeBlocks: Bool = true
+    
+    /// Whether to preserve math symbols
+    var cleaningPreserveMathSymbols: Bool = true
+    
     // MARK: - Computed Properties
     
     /// Last export location as URL
@@ -78,6 +131,90 @@ struct UserPreferences: Codable, Equatable {
         set {
             lastExportLocationPath = newValue?.path
         }
+    }
+    
+    /// Default preset type (computed from string for type safety)
+    var defaultCleaningPresetType: PresetType {
+        get {
+            PresetType(rawValue: defaultCleaningPreset) ?? .default
+        }
+        set {
+            defaultCleaningPreset = newValue.rawValue
+        }
+    }
+    
+    /// Chapter marker style as enum
+    var cleaningChapterMarkerStyleEnum: ChapterMarkerStyle {
+        get {
+            ChapterMarkerStyle(rawValue: cleaningChapterMarkerStyle) ?? .htmlComments
+        }
+        set {
+            cleaningChapterMarkerStyle = newValue.rawValue
+        }
+    }
+    
+    /// End marker style as enum
+    var cleaningEndMarkerStyleEnum: EndMarkerStyle {
+        get {
+            EndMarkerStyle(rawValue: cleaningEndMarkerStyle) ?? .standard
+        }
+        set {
+            cleaningEndMarkerStyle = newValue.rawValue
+        }
+    }
+    
+    /// Metadata format as enum
+    var cleaningMetadataFormatEnum: MetadataFormat {
+        get {
+            MetadataFormat(rawValue: cleaningMetadataFormat) ?? .yaml
+        }
+        set {
+            cleaningMetadataFormat = newValue.rawValue
+        }
+    }
+    
+    /// Generate a CleaningConfiguration from user preferences.
+    /// This creates a configuration based on the default preset, then applies
+    /// any user-specific overrides from preferences.
+    func defaultCleaningConfiguration() -> CleaningConfiguration {
+        var config = CleaningConfiguration(preset: defaultCleaningPresetType)
+        
+        // Apply user overrides
+        config.maxParagraphWords = cleaningMaxParagraphWords
+        config.metadataFormat = cleaningMetadataFormatEnum
+        config.chapterMarkerStyle = cleaningChapterMarkerStyleEnum
+        config.endMarkerStyle = cleaningEndMarkerStyleEnum
+        config.enableChapterSegmentation = cleaningEnableChapterSegmentation
+        
+        // Toggleable steps
+        config.removeAuxiliaryLists = cleaningRemoveAuxiliaryLists
+        config.removeCitations = cleaningRemoveCitations
+        config.removeFootnotesEndnotes = cleaningRemoveFootnotesEndnotes
+        
+        // Content type behavior
+        config.respectContentTypeFlags = cleaningRespectContentTypeFlags
+        config.adjustForChildrensContent = cleaningAdjustForChildrens
+        config.preserveCodeBlocks = cleaningPreserveCodeBlocks
+        config.preserveMathSymbols = cleaningPreserveMathSymbols
+        
+        return config
+    }
+    
+    /// Apply a preset to the cleaning preferences.
+    /// This sets all cleaning-related preferences to match the preset defaults.
+    mutating func applyCleaningPreset(_ preset: PresetType) {
+        defaultCleaningPreset = preset.rawValue
+        
+        // Toggleable steps from preset
+        cleaningRemoveAuxiliaryLists = preset.removeAuxiliaryLists
+        cleaningRemoveCitations = preset.removeCitations
+        cleaningRemoveFootnotesEndnotes = preset.removeFootnotesEndnotes
+        
+        // Parameters from preset
+        cleaningMaxParagraphWords = preset.maxParagraphWords
+        cleaningChapterMarkerStyle = preset.chapterMarkerStyle.rawValue
+        cleaningEndMarkerStyle = preset.endMarkerStyle.rawValue
+        cleaningEnableChapterSegmentation = preset.enableChapterSegmentation
     }
     
     // MARK: - Codable Implementation
@@ -98,6 +235,25 @@ struct UserPreferences: Codable, Equatable {
         case showSidebar
         case showInspector
         case previewMode
+        // Cleaning settings
+        case defaultCleaningPreset
+        case cleaningMaxParagraphWords
+        case cleaningMetadataFormat
+        case autoCleanAfterOCR
+        case showCleaningPreview
+        // Cleaning toggleable steps (V2)
+        case cleaningRemoveAuxiliaryLists
+        case cleaningRemoveCitations
+        case cleaningRemoveFootnotesEndnotes
+        // Cleaning structure settings (V2)
+        case cleaningChapterMarkerStyle
+        case cleaningEndMarkerStyle
+        case cleaningEnableChapterSegmentation
+        // Cleaning content type settings (V2)
+        case cleaningRespectContentTypeFlags
+        case cleaningAdjustForChildrens
+        case cleaningPreserveCodeBlocks
+        case cleaningPreserveMathSymbols
     }
     
     init(from decoder: Decoder) throws {
@@ -125,6 +281,29 @@ struct UserPreferences: Codable, Equatable {
         showSidebar = try container.decodeIfPresent(Bool.self, forKey: .showSidebar) ?? true
         showInspector = try container.decodeIfPresent(Bool.self, forKey: .showInspector) ?? true
         previewMode = try container.decodeIfPresent(PreviewMode.self, forKey: .previewMode) ?? .rendered
+        
+        // Cleaning settings
+        defaultCleaningPreset = try container.decodeIfPresent(String.self, forKey: .defaultCleaningPreset) ?? "default"
+        cleaningMaxParagraphWords = try container.decodeIfPresent(Int.self, forKey: .cleaningMaxParagraphWords) ?? 250
+        cleaningMetadataFormat = try container.decodeIfPresent(String.self, forKey: .cleaningMetadataFormat) ?? "yaml"
+        autoCleanAfterOCR = try container.decodeIfPresent(Bool.self, forKey: .autoCleanAfterOCR) ?? false
+        showCleaningPreview = try container.decodeIfPresent(Bool.self, forKey: .showCleaningPreview) ?? true
+        
+        // Cleaning toggleable steps (V2)
+        cleaningRemoveAuxiliaryLists = try container.decodeIfPresent(Bool.self, forKey: .cleaningRemoveAuxiliaryLists) ?? false
+        cleaningRemoveCitations = try container.decodeIfPresent(Bool.self, forKey: .cleaningRemoveCitations) ?? false
+        cleaningRemoveFootnotesEndnotes = try container.decodeIfPresent(Bool.self, forKey: .cleaningRemoveFootnotesEndnotes) ?? false
+        
+        // Cleaning structure settings (V2)
+        cleaningChapterMarkerStyle = try container.decodeIfPresent(String.self, forKey: .cleaningChapterMarkerStyle) ?? "htmlComments"
+        cleaningEndMarkerStyle = try container.decodeIfPresent(String.self, forKey: .cleaningEndMarkerStyle) ?? "standard"
+        cleaningEnableChapterSegmentation = try container.decodeIfPresent(Bool.self, forKey: .cleaningEnableChapterSegmentation) ?? true
+        
+        // Cleaning content type settings (V2)
+        cleaningRespectContentTypeFlags = try container.decodeIfPresent(Bool.self, forKey: .cleaningRespectContentTypeFlags) ?? true
+        cleaningAdjustForChildrens = try container.decodeIfPresent(Bool.self, forKey: .cleaningAdjustForChildrens) ?? true
+        cleaningPreserveCodeBlocks = try container.decodeIfPresent(Bool.self, forKey: .cleaningPreserveCodeBlocks) ?? true
+        cleaningPreserveMathSymbols = try container.decodeIfPresent(Bool.self, forKey: .cleaningPreserveMathSymbols) ?? true
     }
     
     func encode(to encoder: Encoder) throws {
@@ -148,6 +327,29 @@ struct UserPreferences: Codable, Equatable {
         try container.encode(showSidebar, forKey: .showSidebar)
         try container.encode(showInspector, forKey: .showInspector)
         try container.encode(previewMode, forKey: .previewMode)
+        
+        // Cleaning settings
+        try container.encode(defaultCleaningPreset, forKey: .defaultCleaningPreset)
+        try container.encode(cleaningMaxParagraphWords, forKey: .cleaningMaxParagraphWords)
+        try container.encode(cleaningMetadataFormat, forKey: .cleaningMetadataFormat)
+        try container.encode(autoCleanAfterOCR, forKey: .autoCleanAfterOCR)
+        try container.encode(showCleaningPreview, forKey: .showCleaningPreview)
+        
+        // Cleaning toggleable steps (V2)
+        try container.encode(cleaningRemoveAuxiliaryLists, forKey: .cleaningRemoveAuxiliaryLists)
+        try container.encode(cleaningRemoveCitations, forKey: .cleaningRemoveCitations)
+        try container.encode(cleaningRemoveFootnotesEndnotes, forKey: .cleaningRemoveFootnotesEndnotes)
+        
+        // Cleaning structure settings (V2)
+        try container.encode(cleaningChapterMarkerStyle, forKey: .cleaningChapterMarkerStyle)
+        try container.encode(cleaningEndMarkerStyle, forKey: .cleaningEndMarkerStyle)
+        try container.encode(cleaningEnableChapterSegmentation, forKey: .cleaningEnableChapterSegmentation)
+        
+        // Cleaning content type settings (V2)
+        try container.encode(cleaningRespectContentTypeFlags, forKey: .cleaningRespectContentTypeFlags)
+        try container.encode(cleaningAdjustForChildrens, forKey: .cleaningAdjustForChildrens)
+        try container.encode(cleaningPreserveCodeBlocks, forKey: .cleaningPreserveCodeBlocks)
+        try container.encode(cleaningPreserveMathSymbols, forKey: .cleaningPreserveMathSymbols)
     }
     
     // MARK: - Initializer
@@ -167,7 +369,26 @@ struct UserPreferences: Codable, Equatable {
         showQuickProcessingOptions: Bool = false,
         showSidebar: Bool = true,
         showInspector: Bool = true,
-        previewMode: PreviewMode = .rendered
+        previewMode: PreviewMode = .rendered,
+        // Cleaning settings
+        defaultCleaningPreset: String = "default",
+        cleaningMaxParagraphWords: Int = 250,
+        cleaningMetadataFormat: String = "yaml",
+        autoCleanAfterOCR: Bool = false,
+        showCleaningPreview: Bool = true,
+        // Cleaning toggleable steps (V2)
+        cleaningRemoveAuxiliaryLists: Bool = false,
+        cleaningRemoveCitations: Bool = false,
+        cleaningRemoveFootnotesEndnotes: Bool = false,
+        // Cleaning structure settings (V2)
+        cleaningChapterMarkerStyle: String = "htmlComments",
+        cleaningEndMarkerStyle: String = "standard",
+        cleaningEnableChapterSegmentation: Bool = true,
+        // Cleaning content type settings (V2)
+        cleaningRespectContentTypeFlags: Bool = true,
+        cleaningAdjustForChildrens: Bool = true,
+        cleaningPreserveCodeBlocks: Bool = true,
+        cleaningPreserveMathSymbols: Bool = true
     ) {
         self.showCostConfirmation = showCostConfirmation
         self.costConfirmationThreshold = costConfirmationThreshold
@@ -184,6 +405,22 @@ struct UserPreferences: Codable, Equatable {
         self.showSidebar = showSidebar
         self.showInspector = showInspector
         self.previewMode = previewMode
+        self.defaultCleaningPreset = defaultCleaningPreset
+        self.cleaningMaxParagraphWords = cleaningMaxParagraphWords
+        self.cleaningMetadataFormat = cleaningMetadataFormat
+        self.autoCleanAfterOCR = autoCleanAfterOCR
+        self.showCleaningPreview = showCleaningPreview
+        // V2 settings
+        self.cleaningRemoveAuxiliaryLists = cleaningRemoveAuxiliaryLists
+        self.cleaningRemoveCitations = cleaningRemoveCitations
+        self.cleaningRemoveFootnotesEndnotes = cleaningRemoveFootnotesEndnotes
+        self.cleaningChapterMarkerStyle = cleaningChapterMarkerStyle
+        self.cleaningEndMarkerStyle = cleaningEndMarkerStyle
+        self.cleaningEnableChapterSegmentation = cleaningEnableChapterSegmentation
+        self.cleaningRespectContentTypeFlags = cleaningRespectContentTypeFlags
+        self.cleaningAdjustForChildrens = cleaningAdjustForChildrens
+        self.cleaningPreserveCodeBlocks = cleaningPreserveCodeBlocks
+        self.cleaningPreserveMathSymbols = cleaningPreserveMathSymbols
     }
     
     // MARK: - Persistence

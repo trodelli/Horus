@@ -222,10 +222,232 @@ final class ExportService: ExportServiceProtocol {
             output += "---\n\n"
         }
         
-        // Add content from all pages
-        output += result.fullMarkdown
+        // Add content - use cleaned content if available, otherwise raw OCR
+        if let cleanedContent = document.cleanedContent {
+            output += cleanedContent.cleanedMarkdown
+        } else {
+            output += result.fullMarkdown
+        }
+        
+        // Add cleaning report if enabled and document has been cleaned
+        if configuration.includeCleaningReport, let cleanedContent = document.cleanedContent {
+            output += "\n\n"
+            output += generateCleaningReport(document: document, cleanedContent: cleanedContent)
+        }
         
         return output
+    }
+    
+    // MARK: - Cleaning Report Generation
+    
+    /// Generate comprehensive cleaning report as HTML comment block
+    private func generateCleaningReport(
+        document: Document,
+        cleanedContent: CleanedContent
+    ) -> String {
+        let divider = "═══════════════════════════════════════════════════════════════════"
+        let subDivider = "─────────────────────────────────────────────────────────────────"
+        
+        var report = "<!-- \n"
+        report += "\(divider)\n"
+        report += "HORUS CLEANING REPORT\n"
+        report += "Generated: \(ISO8601DateFormatter().string(from: Date()))\n"
+        report += "Pipeline: V3 Evolved (\(cleanedContent.stepCount) Steps)\n"
+        report += "\(divider)\n\n"
+        
+        // MARK: User Configuration
+        report += "USER CONFIGURATION\n"
+        report += "\(subDivider)\n"
+        
+        if let preset = cleanedContent.appliedPreset {
+            report += formatMetricRow("Preset Applied", preset)
+        } else {
+            report += formatMetricRow("Preset Applied", "Default")
+        }
+        
+        if let contentType = cleanedContent.userContentType {
+            report += formatMetricRow("Content Type", "\(contentType) (User Override)")
+        } else if let detected = cleanedContent.contentTypeFlags?.primaryType {
+            report += formatMetricRow("Content Type", "\(detected.displayName) (Auto-detected)")
+        } else {
+            report += formatMetricRow("Content Type", "Auto-detected")
+        }
+        report += "\n"
+        
+        // MARK: Document Metrics
+        report += "DOCUMENT METRICS\n"
+        report += "\(subDivider)\n"
+        report += formatMetricRow("Original Words", "\(cleanedContent.originalWordCount.formatted())")
+        
+        let reductionSign = cleanedContent.wordReduction >= 0 ? "−" : "+"
+        let reductionPct = String(format: "%.1f", abs(cleanedContent.wordReductionPercentage))
+        report += formatMetricRow("Cleaned Words", "\(cleanedContent.wordCount.formatted())    (\(reductionSign)\(reductionPct)%)")
+        report += formatMetricRow("Characters", "\(cleanedContent.characterCount.formatted())")
+        
+        let estPages = max(1, cleanedContent.wordCount / 250)
+        report += formatMetricRow("Est. Pages", "~\(estPages)")
+        report += formatMetricRow("Est. Tokens", "~\(cleanedContent.estimatedTokenCount.formatted())")
+        report += "\n"
+        
+        // MARK: Processing Metrics
+        report += "PROCESSING METRICS\n"
+        report += "\(subDivider)\n"
+        report += formatMetricRow("Steps Executed", "\(cleanedContent.stepCount)")
+        report += formatMetricRow("API Calls", "\(cleanedContent.apiCallCount)")
+        
+        if cleanedContent.inputTokens > 0 {
+            report += formatMetricRow("Tokens Used", "\(cleanedContent.tokensUsed.formatted()) (input: \(cleanedContent.inputTokens.formatted()) / output: \(cleanedContent.outputTokens.formatted()))")
+        } else {
+            report += formatMetricRow("Tokens Used", "\(cleanedContent.tokensUsed.formatted())")
+        }
+        
+        report += formatMetricRow("Est. Cost", cleanedContent.formattedTotalCost)
+        report += formatMetricRow("Duration", cleanedContent.formattedDuration)
+        report += "\n"
+        
+        // MARK: Phase Execution
+        if let phases = cleanedContent.phaseResults, !phases.isEmpty {
+            report += "PHASE EXECUTION\n"
+            report += "\(subDivider)\n"
+            
+            for phase in phases {
+                let stepNum = String(format: "%2d", phase.stepNumber)
+                let status = phase.completed ? "✓" : "—"  // ✓ = executed, — = skipped
+                let confidenceStr: String
+                if let conf = phase.confidence {
+                    confidenceStr = String(format: "%3d%%", Int(conf * 100))
+                } else if phase.completed {
+                    confidenceStr = "Unknown"  // Executed but no confidence data
+                } else {
+                    confidenceStr = "Skipped"  // Not executed
+                }
+                let methodPad = phase.method.padding(toLength: 6, withPad: " ", startingAt: 0)
+                report += " \(stepNum). \(phase.name.padding(toLength: 25, withPad: " ", startingAt: 0)) \(status) \(methodPad) \(confidenceStr)\n"
+            }
+            report += "\n"
+        }
+        
+        // MARK: Content Analysis
+        report += "CONTENT ANALYSIS\n"
+        report += "\(subDivider)\n"
+        
+        if let contentType = cleanedContent.contentTypeFlags?.primaryType {
+            report += formatMetricRow("Content Type", contentType.displayName)
+        }
+        
+        if let chapters = cleanedContent.chaptersDetected, chapters > 0 {
+            report += formatMetricRow("Chapters Detected", "\(chapters)")
+        }
+        
+        if let hasParts = cleanedContent.hasParts, hasParts {
+            report += "Parts Detected:        Yes\n"
+        }
+        
+        // Scholarly apparatus
+        let citationsRemoved = cleanedContent.citationsRemoved ?? 0
+        let footnotesRemoved = (cleanedContent.footnoteMarkersRemoved ?? 0) + (cleanedContent.footnoteSectionsRemoved ?? 0)
+        
+        if citationsRemoved > 0 || footnotesRemoved > 0 {
+            report += "\nScholarly Apparatus:\n"
+            if citationsRemoved > 0 {
+                let styleInfo = cleanedContent.citationStyleRemoved?.displayName ?? ""
+                report += "  Citations Removed:   \(citationsRemoved)\(styleInfo.isEmpty ? "" : " (\(styleInfo))")\n"
+            }
+            if let markers = cleanedContent.footnoteMarkersRemoved, markers > 0 {
+                let styleInfo = cleanedContent.footnoteMarkerStyleRemoved?.displayName ?? ""
+                report += "  Footnote Markers:    \(markers)\(styleInfo.isEmpty ? "" : " (\(styleInfo))")\n"
+            }
+            if let sections = cleanedContent.footnoteSectionsRemoved, sections > 0 {
+                report += "  Footnote Sections:   \(sections)\n"
+            }
+        }
+        
+        // Auxiliary content
+        if let auxLists = cleanedContent.auxiliaryListsRemoved, auxLists > 0 {
+            report += "\nAuxiliary Content:\n"
+            
+            if let types = cleanedContent.auxiliaryListTypesRemoved, !types.isEmpty {
+                let typeNames = types.map { $0.displayName }.joined(separator: ", ")
+                report += "  Lists Removed:       \(auxLists) (\(typeNames))\n"
+            } else {
+                report += "  Lists Removed:       \(auxLists)\n"
+            }
+            
+            if let lines = cleanedContent.auxiliaryListLinesRemoved, lines > 0 {
+                report += "  Lines Removed:       \(lines)\n"
+            }
+        }
+        
+        // Structural elements
+        if let flags = cleanedContent.contentTypeFlags {
+            report += "\nStructural Elements:\n"
+            report += "  \(flags.hasTabularData ? "✓" : "✗") Tables\n"
+            report += "  \(flags.hasCode ? "✓" : "✗") Code Blocks\n"
+            report += "  \(flags.hasMathematical ? "✓" : "✗") Math Notation\n"
+            report += "  \(flags.hasPoetry ? "✓" : "✗") Poetry/Verse\n"
+            report += "  \(flags.hasDialogue ? "✓" : "✗") Dialogue\n"
+            report += "  \(flags.hasReligiousVerses ? "✓" : "✗") Religious Verses\n"
+            report += "  Content Type: \(flags.primaryType.displayName) (\(Int(flags.confidence * 100))%)\n"
+        }
+        
+        report += "\n"
+        
+        // MARK: Executed Steps
+        report += "EXECUTED STEPS\n"
+        report += "\(subDivider)\n"
+        for step in cleanedContent.executedSteps {
+            let stepNum = String(format: "%2d", step.stepNumber)
+            report += " \(stepNum). \(step.displayName)\n"
+        }
+        report += "\n"
+        
+        // MARK: Issues
+        if let issues = cleanedContent.qualityIssues, !issues.isEmpty {
+            report += "ISSUES (\(issues.count))\n"
+            report += "\(subDivider)\n"
+            
+            for issue in issues {
+                let icon: String
+                switch issue.severity.lowercased() {
+                case "critical": icon = "✗"
+                case "warning": icon = "⚠"
+                default: icon = "ℹ"
+                }
+                
+                report += "\(icon) \(issue.severity.uppercased()): \(issue.description)\n"
+                report += "   Category: \(issue.category)\n"
+                if let location = issue.location, !location.isEmpty {
+                    report += "   Location: \(location)\n"
+                }
+                report += "\n"
+            }
+        }
+        
+        // MARK: Warnings
+        if let warnings = cleanedContent.pipelineWarnings, !warnings.isEmpty {
+            report += "WARNINGS (\(warnings.count))\n"
+            report += "\(subDivider)\n"
+            for warning in warnings {
+                report += "• \(warning)\n"
+            }
+            report += "\n"
+        }
+        
+        // MARK: Quality Assessment
+        report += "QUALITY\n"
+        report += "\(subDivider)\n"
+        report += formatMetricRow("Pattern Confidence", cleanedContent.patternConfidence.displayName)
+        
+        report += "\n\(divider)\n"
+        report += "-->\n"
+        
+        return report
+    }
+    
+    /// Format a metric row with consistent alignment
+    private func formatMetricRow(_ label: String, _ value: String) -> String {
+        let paddedLabel = label.padding(toLength: 19, withPad: " ", startingAt: 0)
+        return "\(paddedLabel)\(value)\n"
     }
     
     // MARK: - JSON Generation
@@ -235,8 +457,62 @@ final class ExportService: ExportServiceProtocol {
         result: OCRResult,
         configuration: ExportConfiguration
     ) throws -> String {
+        // Build cleaning report if enabled and document has been cleaned
+        var cleaningReportSection: JSONExportDocument.CleaningReport? = nil
+        if configuration.includeCleaningReport, let cleaned = document.cleanedContent {
+            // Convert PhaseResult to JSONExportDocument.CleaningReport.Phase
+            let phases: [JSONExportDocument.CleaningReport.Phase]? = cleaned.phaseResults?.map { phase in
+                JSONExportDocument.CleaningReport.Phase(
+                    name: phase.name,
+                    stepNumber: phase.stepNumber,
+                    completed: phase.completed,
+                    confidence: phase.confidence,
+                    method: phase.method
+                )
+            }
+            
+            // Convert QualityIssue to JSONExportDocument.CleaningReport.Issue
+            let issues: [JSONExportDocument.CleaningReport.Issue]? = cleaned.qualityIssues?.map { issue in
+                JSONExportDocument.CleaningReport.Issue(
+                    severity: issue.severity,
+                    category: issue.category,
+                    description: issue.description,
+                    location: issue.location
+                )
+            }
+            
+            cleaningReportSection = JSONExportDocument.CleaningReport(
+                appliedPreset: cleaned.appliedPreset,
+                userContentType: cleaned.userContentType,
+                originalWordCount: cleaned.originalWordCount,
+                cleanedWordCount: cleaned.wordCount,
+                wordReductionPercent: cleaned.wordReductionPercentage,
+                characterCount: cleaned.characterCount,
+                stepsExecuted: cleaned.stepCount,
+                apiCalls: cleaned.apiCallCount,
+                tokensUsed: cleaned.tokensUsed,
+                inputTokens: cleaned.inputTokens,
+                outputTokens: cleaned.outputTokens,
+                estimatedCost: cleaned.formattedTotalCost,
+                durationSeconds: cleaned.cleaningDuration,
+                phases: phases,
+                patternConfidence: cleaned.patternConfidence.displayName,
+                citationsRemoved: cleaned.citationsRemoved,
+                footnotesRemoved: (cleaned.footnoteMarkersRemoved ?? 0) + (cleaned.footnoteSectionsRemoved ?? 0),
+                auxiliaryListsRemoved: cleaned.auxiliaryListsRemoved,
+                chaptersDetected: cleaned.chaptersDetected,
+                executedStepNames: cleaned.executedSteps.map { $0.displayName },
+                issues: issues,
+                warnings: cleaned.pipelineWarnings
+            )
+        }
+        
+        // Use cleaned content for export if available
+        let exportText = document.cleanedContent?.cleanedMarkdown ?? result.fullMarkdown
+        let exportPlainText = document.cleanedContent != nil ? stripMarkdown(exportText) : result.fullPlainText
+        
         let export = JSONExportDocument(
-            schemaVersion: "1.0",
+            schemaVersion: "1.1",
             source: JSONExportDocument.Source(
                 filename: "\(document.displayName).\(document.fileExtension)",
                 fileSizeBytes: document.fileSize,
@@ -250,10 +526,10 @@ final class ExportService: ExportServiceProtocol {
                 costUSD: configuration.includeCost ? result.cost : nil
             ) : nil,
             content: JSONExportDocument.Content(
-                fullText: result.fullMarkdown,
-                plainText: result.fullPlainText,
-                wordCount: result.wordCount,
-                characterCount: result.characterCount,
+                fullText: exportText,
+                plainText: exportPlainText,
+                wordCount: document.cleanedContent?.wordCount ?? result.wordCount,
+                characterCount: document.cleanedContent?.characterCount ?? result.characterCount,
                 pages: result.pages.map { page in
                     JSONExportDocument.Page(
                         index: page.index,
@@ -274,7 +550,8 @@ final class ExportService: ExportServiceProtocol {
                 headings: extractHeadings(from: result),
                 tableCount: result.pages.reduce(0) { $0 + $1.tables.count },
                 imageCount: result.pages.reduce(0) { $0 + $1.images.count }
-            )
+            ),
+            cleaningReport: cleaningReportSection
         )
         
         let encoder = JSONEncoder()
@@ -320,10 +597,40 @@ final class ExportService: ExportServiceProtocol {
             output += String(repeating: "=", count: 60) + "\n\n"
         }
         
-        // Add plain text content
-        output += result.fullPlainText
+        // Add plain text content - use cleaned content if available
+        if let cleanedContent = document.cleanedContent {
+            // Strip markdown formatting for plain text
+            output += stripMarkdown(cleanedContent.cleanedMarkdown)
+        } else {
+            output += result.fullPlainText
+        }
+        
+        // Add cleaning report if enabled and document has been cleaned
+        if configuration.includeCleaningReport, let cleanedContent = document.cleanedContent {
+            output += "\n\n"
+            output += generateCleaningReport(document: document, cleanedContent: cleanedContent)
+        }
         
         return output
+    }
+    
+    /// Strip markdown formatting to produce plain text
+    private func stripMarkdown(_ markdown: String) -> String {
+        var text = markdown
+        
+        // Remove headers
+        text = text.replacingOccurrences(of: "^#{1,6}\\s*", with: "", options: .regularExpression, range: nil)
+        
+        // Remove bold/italic
+        text = text.replacingOccurrences(of: "\\*\\*(.+?)\\*\\*", with: "$1", options: .regularExpression, range: nil)
+        text = text.replacingOccurrences(of: "\\*(.+?)\\*", with: "$1", options: .regularExpression, range: nil)
+        text = text.replacingOccurrences(of: "__(.+?)__", with: "$1", options: .regularExpression, range: nil)
+        text = text.replacingOccurrences(of: "_(.+?)_", with: "$1", options: .regularExpression, range: nil)
+        
+        // Remove links but keep text
+        text = text.replacingOccurrences(of: "\\[(.+?)\\]\\(.+?\\)", with: "$1", options: .regularExpression, range: nil)
+        
+        return text
     }
     
     // MARK: - Helper Methods
@@ -369,6 +676,7 @@ struct JSONExportDocument: Codable {
     let processing: Processing?
     let content: Content
     let structure: Structure
+    let cleaningReport: CleaningReport?
     
     struct Source: Codable {
         let filename: String
@@ -416,6 +724,57 @@ struct JSONExportDocument: Codable {
         let level: Int
         let text: String
         let page: Int
+    }
+    
+    struct CleaningReport: Codable {
+        // Configuration
+        let appliedPreset: String?
+        let userContentType: String?
+        
+        // Document metrics
+        let originalWordCount: Int
+        let cleanedWordCount: Int
+        let wordReductionPercent: Double
+        let characterCount: Int
+        
+        // Processing metrics
+        let stepsExecuted: Int
+        let apiCalls: Int
+        let tokensUsed: Int
+        let inputTokens: Int
+        let outputTokens: Int
+        let estimatedCost: String
+        let durationSeconds: TimeInterval
+        
+        // Phase execution
+        let phases: [Phase]?
+        
+        // Content analysis
+        let patternConfidence: String
+        let citationsRemoved: Int?
+        let footnotesRemoved: Int
+        let auxiliaryListsRemoved: Int?
+        let chaptersDetected: Int?
+        let executedStepNames: [String]
+        
+        // Quality
+        let issues: [Issue]?
+        let warnings: [String]?
+        
+        struct Phase: Codable {
+            let name: String
+            let stepNumber: Int
+            let completed: Bool
+            let confidence: Double?
+            let method: String
+        }
+        
+        struct Issue: Codable {
+            let severity: String
+            let category: String
+            let description: String
+            let location: String?
+        }
     }
 }
 

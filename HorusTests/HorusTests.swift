@@ -15,35 +15,74 @@ import XCTest
 @testable import Horus
 
 /// Smoke tests to verify basic app functionality
+///
+/// Note: AppState uses @Observable and @MainActor, which requires careful lifecycle
+/// management in tests to avoid memory corruption during deallocation.
+/// We store AppState as an instance variable and clean it up in tearDown.
 final class HorusTests: XCTestCase {
+    
+    // MARK: - Properties
+    
+    /// Store AppState at class level to ensure proper cleanup
+    /// This prevents crashes during deallocation of @Observable @MainActor objects
+    private var appState: AppState?
+    
+    // MARK: - Setup/Teardown
+    
+    @MainActor
+    override func setUp() {
+        super.setUp()
+        appState = nil
+    }
+    
+    @MainActor
+    override func tearDown() {
+        // Explicitly nil out to ensure proper deallocation ordering
+        appState = nil
+        super.tearDown()
+    }
     
     // MARK: - App Initialization Tests
     
     @MainActor
-    func testAppStateInitialization() {
-        let appState = AppState(
-            keychainService: MockKeychainService(),
-            costCalculator: MockCostCalculator(),
-            apiKeyValidator: MockAPIKeyValidator(),
-            documentService: MockDocumentService(),
-            ocrService: MockOCRService(),
-            exportService: MockExportService()
+    func testAppStateInitialization() throws {
+        // Create mock services
+        let mockKeychain = MockKeychainService()
+        let mockCalculator = MockCostCalculator()
+        let mockValidator = MockAPIKeyValidator()
+        let mockDocument = MockDocumentService()
+        let mockOCR = MockOCRService()
+        let mockExport = MockExportService()
+        
+        // Initialize app state with all dependencies
+        appState = AppState(
+            keychainService: mockKeychain,
+            costCalculator: mockCalculator,
+            apiKeyValidator: mockValidator,
+            documentService: mockDocument,
+            ocrService: mockOCR,
+            exportService: mockExport
         )
         
-        XCTAssertNotNil(appState.session)
-        XCTAssertNotNil(appState.preferences)
-        XCTAssertNotNil(appState.documentQueueViewModel)
-        XCTAssertNotNil(appState.processingViewModel)
-        XCTAssertNotNil(appState.exportViewModel)
+        // Verify all components are initialized
+        XCTAssertNotNil(appState?.session, "Session should be initialized")
+        XCTAssertNotNil(appState?.preferences, "Preferences should be initialized")
+        XCTAssertNotNil(appState?.documentQueueViewModel, "DocumentQueueViewModel should be initialized")
+        XCTAssertNotNil(appState?.processingViewModel, "ProcessingViewModel should be initialized")
+        XCTAssertNotNil(appState?.exportViewModel, "ExportViewModel should be initialized")
+        
+        // Verify services are correctly set
+        XCTAssertTrue(appState?.keychainService is MockKeychainService, "Keychain service should be MockKeychainService")
+        XCTAssertTrue(appState?.costCalculator is MockCostCalculator, "Cost calculator should be MockCostCalculator")
     }
     
     @MainActor
     func testAppStateWithoutAPIKey() {
         let mockKeychain = MockKeychainService()
-        let appState = AppState(keychainService: mockKeychain)
+        appState = AppState(keychainService: mockKeychain)
         
-        XCTAssertFalse(appState.hasAPIKey)
-        XCTAssertTrue(appState.showOnboarding)
+        XCTAssertFalse(appState?.hasAPIKey ?? true)
+        XCTAssertTrue(appState?.showOnboarding ?? false)
     }
     
     @MainActor
@@ -51,10 +90,10 @@ final class HorusTests: XCTestCase {
         let mockKeychain = MockKeychainService()
         try mockKeychain.storeAPIKey("sk-test-key")
         
-        let appState = AppState(keychainService: mockKeychain)
+        appState = AppState(keychainService: mockKeychain)
         
-        XCTAssertTrue(appState.hasAPIKey)
-        XCTAssertFalse(appState.showOnboarding)
+        XCTAssertTrue(appState?.hasAPIKey ?? false)
+        XCTAssertFalse(appState?.showOnboarding ?? true)
     }
     
     // MARK: - API Key Management Tests
@@ -62,13 +101,13 @@ final class HorusTests: XCTestCase {
     @MainActor
     func testStoreAPIKey() throws {
         let mockKeychain = MockKeychainService()
-        let appState = AppState(keychainService: mockKeychain)
+        appState = AppState(keychainService: mockKeychain)
         
-        XCTAssertFalse(appState.hasAPIKey)
+        XCTAssertFalse(appState?.hasAPIKey ?? true)
         
-        try appState.storeAPIKey("sk-test-key-123")
+        try appState?.storeAPIKey("sk-test-key-123")
         
-        XCTAssertTrue(appState.hasAPIKey)
+        XCTAssertTrue(appState?.hasAPIKey ?? false)
         XCTAssertEqual(try mockKeychain.retrieveAPIKey(), "sk-test-key-123")
     }
     
@@ -76,13 +115,13 @@ final class HorusTests: XCTestCase {
     func testDeleteAPIKey() throws {
         let mockKeychain = MockKeychainService()
         try mockKeychain.storeAPIKey("sk-test-key")
-        let appState = AppState(keychainService: mockKeychain)
+        appState = AppState(keychainService: mockKeychain)
         
-        XCTAssertTrue(appState.hasAPIKey)
+        XCTAssertTrue(appState?.hasAPIKey ?? false)
         
-        try appState.deleteAPIKey()
+        try appState?.deleteAPIKey()
         
-        XCTAssertFalse(appState.hasAPIKey)
+        XCTAssertFalse(appState?.hasAPIKey ?? true)
     }
     
     // MARK: - Document Import Tests
@@ -90,58 +129,72 @@ final class HorusTests: XCTestCase {
     @MainActor
     func testImportDocuments() async {
         let mockDocService = MockDocumentService()
-        let appState = AppState(documentService: mockDocService)
+        appState = AppState(documentService: mockDocService)
         
         let urls = [
             URL(fileURLWithPath: "/test/doc1.pdf"),
             URL(fileURLWithPath: "/test/doc2.pdf")
         ]
         
-        let count = await appState.importDocuments(from: urls)
+        let count = await appState?.importDocuments(from: urls) ?? 0
         
         XCTAssertEqual(count, 2)
-        XCTAssertEqual(appState.session.documentCount, 2)
+        XCTAssertEqual(appState?.session.documentCount, 2)
     }
     
     // MARK: - Selection Tests
     
     @MainActor
     func testDocumentSelection() throws {
-        let appState = AppState()
+        appState = AppState()
         let doc = Document.mock(name: "Test")
-        try appState.session.addDocuments([doc])
+        try appState?.session.addDocuments([doc])
         
-        appState.selectDocument(doc.id)
+        appState?.selectDocument(doc)
         
-        XCTAssertEqual(appState.selectedDocument?.id, doc.id)
-        XCTAssertTrue(appState.isSelected(doc))
+        // Since it's a pending document, it should be selected in the input tab
+        XCTAssertEqual(appState?.selectedInputDocument?.id, doc.id)
+        XCTAssertEqual(appState?.selectedTab, .input)
+    }
+    
+    @MainActor
+    func testCompletedDocumentSelection() throws {
+        appState = AppState()
+        let doc = Document.mockCompleted(name: "Test")
+        try appState?.session.addDocuments([doc])
+        
+        appState?.selectDocument(doc)
+        
+        // Completed documents should be selected in the library tab
+        XCTAssertEqual(appState?.selectedLibraryDocument?.id, doc.id)
+        XCTAssertEqual(appState?.selectedTab, .library)
     }
     
     // MARK: - Export State Tests
     
     @MainActor
     func testCanExport() throws {
-        let appState = AppState()
+        appState = AppState()
         
-        XCTAssertFalse(appState.canExport)
+        XCTAssertFalse(appState?.canExport ?? true)
         
         let doc = Document.mockCompleted(name: "Test")
-        try appState.session.addDocuments([doc])
+        try appState?.session.addDocuments([doc])
         
-        XCTAssertTrue(appState.canExport)
+        XCTAssertTrue(appState?.canExport ?? false)
     }
     
     @MainActor
     func testCanExportSelected() throws {
-        let appState = AppState()
+        appState = AppState()
         
-        XCTAssertFalse(appState.canExportSelected)
+        XCTAssertFalse(appState?.canExportSelected ?? true)
         
         let doc = Document.mockCompleted(name: "Test")
-        try appState.session.addDocuments([doc])
-        appState.selectDocument(doc.id)
+        try appState?.session.addDocuments([doc])
+        appState?.selectDocument(doc)
         
-        XCTAssertTrue(appState.canExportSelected)
+        XCTAssertTrue(appState?.canExportSelected ?? false)
     }
     
     // MARK: - Cost Calculation Tests
@@ -149,9 +202,9 @@ final class HorusTests: XCTestCase {
     @MainActor
     func testEstimateCost() {
         let mockCalculator = MockCostCalculator()
-        let appState = AppState(costCalculator: mockCalculator)
+        appState = AppState(costCalculator: mockCalculator)
         
-        let cost = appState.estimateCost(pages: 50)
+        let cost = appState?.estimateCost(pages: 50)
         
         XCTAssertEqual(cost, Decimal(string: "0.05"))
     }
@@ -160,43 +213,43 @@ final class HorusTests: XCTestCase {
     
     @MainActor
     func testShowError() {
-        let appState = AppState()
+        appState = AppState()
         
-        XCTAssertNil(appState.currentAlert)
+        XCTAssertNil(appState?.currentAlert)
         
-        appState.showError(ExportError.noResult)
+        appState?.showError(ExportError.noResult)
         
-        XCTAssertNotNil(appState.currentAlert)
-        XCTAssertEqual(appState.currentAlert?.title, "Export Error")
+        XCTAssertNotNil(appState?.currentAlert)
+        XCTAssertEqual(appState?.currentAlert?.title, "Export Error")
     }
     
     @MainActor
     func testDismissAlert() {
-        let appState = AppState()
-        appState.showError(ExportError.noResult)
+        appState = AppState()
+        appState?.showError(ExportError.noResult)
         
-        XCTAssertNotNil(appState.currentAlert)
+        XCTAssertNotNil(appState?.currentAlert)
         
-        appState.dismissAlert()
+        appState?.dismissAlert()
         
-        XCTAssertNil(appState.currentAlert)
+        XCTAssertNil(appState?.currentAlert)
     }
     
     // MARK: - Session Tests
     
     @MainActor
     func testNewSession() throws {
-        let appState = AppState()
-        try appState.session.addDocuments([
+        appState = AppState()
+        try appState?.session.addDocuments([
             Document.mock(name: "Doc1"),
             Document.mock(name: "Doc2")
         ])
         
-        XCTAssertEqual(appState.session.documentCount, 2)
+        XCTAssertEqual(appState?.session.documentCount, 2)
         
-        appState.newSession()
+        appState?.newSession()
         
-        XCTAssertEqual(appState.session.documentCount, 0)
+        XCTAssertEqual(appState?.session.documentCount, 0)
     }
 }
 
@@ -204,25 +257,53 @@ final class HorusTests: XCTestCase {
 
 final class HorusIntegrationTests: XCTestCase {
     
+    // MARK: - Properties
+    
+    private var appState: AppState?
+    
+    // MARK: - Setup/Teardown
+    
+    @MainActor
+    override func setUp() {
+        super.setUp()
+        appState = nil
+    }
+    
+    @MainActor
+    override func tearDown() {
+        appState = nil
+        super.tearDown()
+    }
+    
+    // MARK: - Tests
+    
     @MainActor
     func testFullWorkflow() async throws {
         // Setup mocks
         let mockKeychain = MockKeychainService()
         try mockKeychain.storeAPIKey("sk-test-key")
         
+        let mockDocument = MockDocumentService()
         let mockOCR = MockOCRService()
         let mockExport = MockExportService()
         
-        let appState = AppState(
+        appState = AppState(
             keychainService: mockKeychain,
+            documentService: mockDocument,
             ocrService: mockOCR,
             exportService: mockExport
         )
         
+        guard let appState = appState else {
+            XCTFail("AppState should be initialized")
+            return
+        }
+        
         // 1. Import documents
         let urls = [URL(fileURLWithPath: "/test/doc.pdf")]
-        _ = await appState.importDocuments(from: urls)
+        let count = await appState.importDocuments(from: urls)
         
+        XCTAssertEqual(count, 1)
         XCTAssertEqual(appState.session.documentCount, 1)
         
         // 2. Verify can process

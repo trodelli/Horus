@@ -65,9 +65,20 @@ final class ProcessingSession {
         documents.filter { $0.status.isActive }
     }
     
-    /// Documents that completed successfully
+    /// Documents that completed successfully (OCR or direct import complete)
     var completedDocuments: [Document] {
         documents.filter { $0.isCompleted }
+    }
+    
+    /// Documents explicitly added to the library by the user
+    var libraryDocuments: [Document] {
+        documents.filter { $0.isInLibrary }
+    }
+    
+    /// Documents that completed processing but are NOT yet in library
+    /// These are awaiting user decision (add to library, clean, etc.)
+    var awaitingLibraryDocuments: [Document] {
+        documents.filter { $0.isCompleted && !$0.isInLibrary }
     }
     
     /// Documents that failed processing
@@ -189,6 +200,40 @@ final class ProcessingSession {
     /// - Returns: The document if found
     func document(withId id: UUID) -> Document? {
         documents.first { $0.id == id }
+    }
+    
+    /// Update a document's cleaned content
+    /// - Parameters:
+    ///   - id: The document ID
+    ///   - cleanedContent: The cleaned content to attach
+    func updateDocumentCleanedContent(id: UUID, cleanedContent: CleanedContent) {
+        guard let index = documents.firstIndex(where: { $0.id == id }) else { return }
+        // Explicitly replace the element to ensure SwiftUI observation detects the change
+        var updatedDocument = documents[index]
+        updatedDocument.cleanedContent = cleanedContent
+        documents[index] = updatedDocument
+    }
+    
+    /// Add a document to the library
+    /// - Parameter id: The document ID to add to library
+    func addToLibrary(id: UUID) {
+        guard let index = documents.firstIndex(where: { $0.id == id }) else { return }
+        // Explicitly replace the element to ensure SwiftUI observation detects the change
+        var updatedDocument = documents[index]
+        updatedDocument.isInLibrary = true
+        documents[index] = updatedDocument
+        updateState()
+    }
+    
+    /// Remove a document from the library (but keep in session)
+    /// - Parameter id: The document ID to remove from library
+    func removeFromLibrary(id: UUID) {
+        guard let index = documents.firstIndex(where: { $0.id == id }) else { return }
+        // Explicitly replace the element to ensure SwiftUI observation detects the change
+        var updatedDocument = documents[index]
+        updatedDocument.isInLibrary = false
+        documents[index] = updatedDocument
+        updateState()
     }
     
     // MARK: - Private Helpers

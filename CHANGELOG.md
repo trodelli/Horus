@@ -5,6 +5,62 @@ All notable changes to Horus will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+---
+
+## [3.0.0] - 2026-02-08
+
+### Added
+
+#### Intelligent Content Cleaning Pipeline
+
+- **V3 Evolved Cleaning Pipeline** — Sophisticated 16-step document cleaning system powered by Claude AI
+- **8 Processing Phases** — Reconnaissance, Verification, Detection, Structural Removal, Reference Removal, Normalization, Optimization, and Quality Assurance
+- **AI-Powered Structure Analysis** — Claude analyzes document structure before cleaning begins
+- **Content Type Detection** — Automatic classification across 13 document types (fiction, academic, technical, legal, medical, financial, and more)
+- **Confidence Scoring System** — Per-phase and pipeline-wide confidence metrics for transparency
+- **Toggleable Processing Steps** — Disable removal of citations, footnotes, auxiliary lists, or table of contents as needed
+- **Processing Presets** — Four pre-configured profiles: Default, Training, Minimal, and Scholarly
+- **Clean Tab Interface** — Dedicated tab for the cleaning workflow with real-time progress and confidence display
+
+#### Dual-API Architecture
+
+- **Claude API Integration** — Anthropic's Claude (claude-sonnet-4-20250514) powers the cleaning pipeline
+- **Dual Keychain Storage** — Secure storage for both Mistral and Claude API keys
+- **Cost Tracking for Cleaning** — Transparent cost estimation and tracking for Claude API usage
+- **Independent Processing Paths** — OCR and cleaning can run independently or as a combined pipeline
+
+#### Direct-to-Clean Path
+
+- **Text File Support** — Process plain text (.txt), rich text (.rtf), JSON, XML, and HTML directly through the cleaning pipeline without OCR
+- **Bypass OCR** — Skip OCR entirely for documents that are already text-based
+- **Format Flexibility** — Handle both image-based documents (via OCR) and text-based documents (direct cleaning)
+
+#### UI Enhancements
+
+- **Clean Tab** — New fourth tab dedicated to the cleaning interface
+- **Cleaning Inspector** — Detailed view of cleaning configuration, progress, and results
+- **Preset Selector** — Easy switching between cleaning presets
+- **Toggle Controls** — Individual switches for each toggleable cleaning step
+- **Confidence Display** — Visual indicators for cleaning confidence scores
+- **Processing Phase Indicator** — Real-time display of current cleaning phase
+
+### Changed
+
+- **Tab Structure** — Expanded from 3 tabs (Queue, Library, Settings) to 5 tabs (Input, OCR, Clean, Library, Settings)
+- **Navigation Sidebar** — Updated to reflect new tab structure with appropriate icons
+- **Settings View** — Added Claude API key configuration alongside Mistral
+- **Keyboard Shortcuts** — Added `⌘K` for Clean Selected and updated tab shortcuts for new structure
+- **Menu Structure** — Added Clean menu with cleaning-specific commands
+
+### Improved
+
+- **Document Lifecycle** — Documents can now progress through both OCR and cleaning stages
+- **Export Metadata** — Cleaned documents include cleaning-specific metadata (preset used, confidence scores, steps applied)
+- **Error Handling** — Enhanced error reporting for cleaning pipeline failures
+- **Cost Transparency** — Separate cost tracking for OCR and cleaning operations
+
+---
+
 ## [2.1.0] - 2026-01-09
 
 ### Added
@@ -100,6 +156,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Export history tracking
 - Dark/light mode theme support
 - Localization support
+- Custom cleaning rule builder
+- Before/after comparison UI
 
 ---
 
@@ -107,6 +165,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 3.0.0 | 2026-02-08 | Intelligent cleaning pipeline, dual-API architecture, Clean tab |
 | 2.1.0 | 2026-01-09 | Multiple format export, improved export UX |
 | 2.0.0 | 2026-01-07 | Page navigation, improved progress UX, About window |
 | 1.0.0 | 2026-01-06 | Initial release |

@@ -23,14 +23,16 @@ struct LibraryView: View {
     enum PreviewMode: String, CaseIterable {
         case rendered = "Rendered"
         case raw = "Raw"
+        case cleaned = "Cleaned"
     }
     
     private var filteredDocuments: [Document] {
-        let completed = appState.session.completedDocuments
+        // Use libraryDocuments (only documents explicitly added to library)
+        let library = appState.libraryDocuments
         if searchText.isEmpty {
-            return completed.sorted(using: sortOrder)
+            return library.sorted(using: sortOrder)
         }
-        return completed.filter { doc in
+        return library.filter { doc in
             doc.displayName.localizedCaseInsensitiveContains(searchText) ||
             (doc.result?.fullMarkdown.localizedCaseInsensitiveContains(searchText) ?? false)
         }.sorted(using: sortOrder)
@@ -39,21 +41,29 @@ struct LibraryView: View {
     var body: some View {
         HSplitView {
             documentListPane
-                .frame(minWidth: 280, maxWidth: 450)
+                .frame(
+                    minWidth: DesignConstants.Layout.fileListMinWidth,
+                    maxWidth: DesignConstants.Layout.fileListMaxWidth
+                )
+            
             previewPane
-                .frame(minWidth: 350)
+                .frame(minWidth: DesignConstants.Layout.contentPaneMinWidth)
         }
-        // Reset page selection when document changes
-        .onChange(of: appState.selectedLibraryDocumentId) { _, _ in
+        .onChange(of: appState.selectedLibraryDocumentId) { _, newId in
             appState.selectedPageIndex = 0
+            
+            if let id = newId,
+               let doc = appState.libraryDocuments.first(where: { $0.id == id }) {
+                previewMode = doc.isCleaned ? .cleaned : .rendered
+            } else {
+                previewMode = .rendered
+            }
         }
-        // Keyboard shortcut: Delete key removes selected document
         .onDeleteCommand {
             if let document = appState.selectedLibraryDocument {
                 appState.requestDeleteDocument(document)
             }
         }
-        // Confirmation dialog for clearing library
         .confirmationDialog(
             "Clear Library?",
             isPresented: Binding(
@@ -67,9 +77,8 @@ struct LibraryView: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("This will remove all \(appState.session.completedDocuments.count) documents from the library. This cannot be undone.")
+            Text("This will remove all \(appState.libraryDocuments.count) documents from the library. This cannot be undone.")
         }
-        // Confirmation dialog for deleting single document
         .confirmationDialog(
             "Delete Document?",
             isPresented: Binding(
@@ -95,187 +104,143 @@ struct LibraryView: View {
     
     private var documentListPane: some View {
         VStack(spacing: 0) {
-            // Toolbar with search and actions
-            listToolbar
+            // Header
+            TabHeaderView(
+                title: "Library",
+                subtitle: "Your processed documents",
+                searchText: $searchText
+            ) {
+                if !appState.libraryDocuments.isEmpty {
+                    Button {
+                        appState.requestClearLibrary()
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(DesignConstants.Typography.searchIcon)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Clear all documents from library (⌘⇧⌫)")
+                }
+            }
             
             Divider()
             
+            // Content
             if filteredDocuments.isEmpty {
                 emptyState
             } else {
-                documentTable
+                documentList
             }
             
             Divider()
+            
+            // Footer
             listFooter
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    
-    private var listToolbar: some View {
-        HStack(spacing: 8) {
-            // Search bar
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.tertiary)
-                    .font(.system(size: 11))
-                TextField("Search...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                if !searchText.isEmpty {
-                    Button { searchText = "" } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.tertiary)
-                            .font(.system(size: 11))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            .background(Color(nsColor: .quaternaryLabelColor).opacity(0.5))
-            .cornerRadius(5)
-            
-            Spacer()
-            
-            // Clear Library button (NEW)
-            if !appState.session.completedDocuments.isEmpty {
-                Button {
-                    appState.requestClearLibrary()
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 11))
-                }
-                .buttonStyle(.borderless)
-                .help("Clear all documents from library (⌘⇧⌫)")
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-    }
-    
-    private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 36))
-                .foregroundStyle(.tertiary)
-            Text("No Completed Documents")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-            Text(searchText.isEmpty
-                 ? "Process documents in the Queue tab to see them here."
-                 : "No documents match '\(searchText)'")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    
-    private var documentTable: some View {
-        let selectionBinding = Binding(
-            get: { appState.selectedLibraryDocumentId },
-            set: { appState.selectedLibraryDocumentId = $0 }
-        )
-        
-        return Table(filteredDocuments, selection: selectionBinding, sortOrder: $sortOrder) {
-            nameColumn
-            pagesColumn
-            costColumn
-            processedColumn
-        }
-        .tableStyle(.inset(alternatesRowBackgrounds: false))
-        .contextMenu(forSelectionType: UUID.self) { ids in
-            documentContextMenu(for: ids)
-        }
-    }
-    
-    private var nameColumn: some TableColumnContent<Document, KeyPathComparator<Document>> {
-        TableColumn("Name", value: \.displayName) { doc in
-            HStack(spacing: 6) {
-                Image(systemName: doc.contentType == .pdf ? "doc.fill" : "photo.fill")
-                    .foregroundStyle(.blue)
-                    .font(.system(size: 11))
-                Text(doc.displayName)
-                    .lineLimit(1)
-            }
-        }
-        .width(min: 100, ideal: 160)
-    }
-    
-    private var pagesColumn: some TableColumnContent<Document, Never> {
-        TableColumn("Pages") { doc in
-            Text("\(doc.result?.pageCount ?? 0)")
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .font(.system(size: 12))
-        }
-        .width(45)
-    }
-    
-    private var costColumn: some TableColumnContent<Document, Never> {
-        TableColumn("Cost") { doc in
-            if let cost = doc.actualCost {
-                Text(cost.formatted(.currency(code: "USD")))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .font(.system(size: 12))
-            }
-        }
-        .width(55)
-    }
-    
-    private var processedColumn: some TableColumnContent<Document, Never> {
-        TableColumn("Processed") { doc in
-            if let date = doc.processedAt {
-                Text(date, style: .relative)
-                    .foregroundStyle(.tertiary)
-                    .font(.system(size: 11))
-            } else {
-                Text("")
-            }
-        }
-        .width(min: 70, ideal: 90)
+        .background(DesignConstants.Colors.fileListBackground)
     }
     
     @ViewBuilder
-    private func documentContextMenu(for ids: Set<UUID>) -> some View {
-        if let id = ids.first, let doc = filteredDocuments.first(where: { $0.id == id }) {
-            Button("Export...") {
-                appState.selectedLibraryDocumentId = doc.id
-                appState.exportSelectedDocument()
+    private var emptyState: some View {
+        if searchText.isEmpty {
+            EmptyStateView(
+                icon: "books.vertical",
+                title: "Library Empty",
+                description: "Documents appear here after you add them to the Library. Process documents in Input, then use \"Add to Library\" to finish.",
+                buttonTitle: "Go to Input",
+                buttonAction: { appState.selectedTab = .input },
+                accentColor: .green
+            )
+        } else {
+            EmptyStateView(
+                icon: "magnifyingglass",
+                title: "No Results",
+                description: "No documents match '\(searchText)'"
+            )
+        }
+    }
+    
+    private var documentList: some View {
+        List(selection: Binding(
+            get: { appState.selectedLibraryDocumentId },
+            set: { appState.selectedLibraryDocumentId = $0 }
+        )) {
+            ForEach(filteredDocuments) { document in
+                LibraryDocumentRow(document: document)
+                    .tag(document.id)
+                    .contextMenu { documentContextMenu(for: document) }
             }
-            Button("Copy to Clipboard") {
+        }
+        .listStyle(.inset(alternatesRowBackgrounds: false))
+    }
+    
+    @ViewBuilder
+    private func documentContextMenu(for doc: Document) -> some View {
+        if doc.isCleaned {
+            Button("Re-clean...") {
+                appState.selectedLibraryDocumentId = doc.id
+                appState.cleanSelectedDocument()
+            }
+        } else {
+            Button("Clean...") {
+                appState.selectedLibraryDocumentId = doc.id
+                appState.cleanSelectedDocument()
+            }
+            .disabled(!doc.canClean)
+        }
+        
+        Divider()
+        
+        Button("Export...") {
+            appState.selectedLibraryDocumentId = doc.id
+            appState.exportSelectedDocument()
+        }
+        
+        Menu("Copy to Clipboard") {
+            Button("Copy Original OCR") {
                 appState.selectedLibraryDocumentId = doc.id
                 appState.copySelectedToClipboard()
             }
-            Divider()
-            Button("Show in Finder") {
-                NSWorkspace.shared.activateFileViewerSelecting([doc.sourceURL])
+            if doc.isCleaned {
+                Button("Copy Cleaned Content") {
+                    if let cleanedContent = doc.cleanedContent {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(cleanedContent.cleanedMarkdown, forType: .string)
+                    }
+                }
             }
-            Divider()
-            Button("Delete", role: .destructive) {
-                appState.requestDeleteDocument(doc)
-            }
+        }
+        
+        Divider()
+        
+        Button("Show in Finder") {
+            NSWorkspace.shared.activateFileViewerSelecting([doc.sourceURL])
+        }
+        
+        Divider()
+        
+        Button("Delete", role: .destructive) {
+            appState.requestDeleteDocument(doc)
         }
     }
     
     private var listFooter: some View {
-        HStack {
+        TabFooterView {
             Text("\(filteredDocuments.count) document\(filteredDocuments.count == 1 ? "" : "s")")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-            Spacer()
+            
+            let cleanedCount = filteredDocuments.filter(\.isCleaned).count
+            if cleanedCount > 0 {
+                Text("•")
+                    .foregroundStyle(.tertiary)
+                Text("\(cleanedCount) cleaned")
+                    .foregroundStyle(.purple)
+            }
+        } trailing: {
             if !filteredDocuments.isEmpty {
                 let total = filteredDocuments.compactMap(\.actualCost).reduce(Decimal.zero, +)
-                Text("Total: \(total.formatted(.currency(code: "USD")))")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                Text(CostCalculator.shared.formatCost(total))
                     .monospacedDigit()
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
     }
     
     // MARK: - Preview Pane
@@ -283,79 +248,130 @@ struct LibraryView: View {
     private var previewPane: some View {
         VStack(spacing: 0) {
             if let doc = appState.selectedLibraryDocument {
-                previewToolbar(for: doc)
-                
-                // Statistics bar (shows key metrics at a glance)
-                if let result = doc.result {
-                    ProcessingStatsBar(result: result, fileSize: doc.fileSize)
-                }
+                contentHeader(for: doc)
                 
                 Divider()
+                
                 previewContent(for: doc)
-                Divider()
-                previewFooter(for: doc)
             } else {
                 noSelectionView
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(DesignConstants.Colors.contentBackground)
+    }
+    
+    private func contentHeader(for doc: Document) -> some View {
+        ContentHeaderView(
+            title: doc.displayName,
+            fileType: FileTypeHelper.description(for: doc)
+        ) {
+            // Level 2 Actions
+            HStack(spacing: DesignConstants.Spacing.sm) {
+                if doc.isCleaned {
+                    HStack(spacing: DesignConstants.Spacing.xs) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10))
+                        Text("Cleaned")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundStyle(.purple)
+                    .padding(.horizontal, DesignConstants.Spacing.sm)
+                    .padding(.vertical, 3)
+                    .background(Color.purple.opacity(0.1))
+                    .cornerRadius(DesignConstants.CornerRadius.sm)
+                    
+                    Picker("", selection: $previewMode) {
+                        Text("Original").tag(PreviewMode.rendered)
+                        Text("Cleaned").tag(PreviewMode.cleaned)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 140)
+                } else {
+                    Picker("", selection: $previewMode) {
+                        Text("Rendered").tag(PreviewMode.rendered)
+                        Text("Raw").tag(PreviewMode.raw)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 130)
+                }
+                
+                Divider().frame(height: 18)
+                
+                Button { appState.exportSelectedDocument() } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .buttonStyle(.borderless)
+                .help("Export (⌘E)")
+                
+                if doc.isCleaned {
+                    Button { appState.cleanSelectedDocument() } label: {
+                        Image(systemName: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Re-clean Document (⌘K)")
+                } else {
+                    Button { appState.cleanSelectedDocument() } label: {
+                        Image(systemName: "sparkles")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Clean Document (⌘K)")
+                    .disabled(!doc.canClean)
+                }
+                
+                Button { appState.copySelectedToClipboard() } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+                .help("Copy to Clipboard (⇧⌘C)")
+                
+                Button { appState.requestDeleteSelectedLibraryDocument() } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .help("Delete (⌫)")
+            }
+        } metrics: {
+            // Level 3 Metrics
+            if let result = doc.result {
+                MetricsRow(items: buildMetricItems(for: doc, result: result))
+            }
+        }
+    }
+    
+    private func buildMetricItems(for doc: Document, result: OCRResult) -> [MetricItem] {
+        var items: [MetricItem] = [
+            MetricItem(icon: "doc.text", value: "\(result.pageCount)"),
+            MetricItem(icon: "textformat", value: result.wordCount.formatted())
+        ]
+        
+        // Add cleaned-specific metrics if available
+        if let cleaned = doc.cleanedContent {
+            items.append(MetricItem(
+                icon: "arrow.down.right",
+                value: String(format: "%.1f%%", cleaned.wordReductionPercentage),
+                color: cleaned.wordReductionPercentage > 0 ? .green : nil
+            ))
+        }
+        
+        // Add processing date
+        if let processedAt = doc.processedAt {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            items.append(MetricItem(icon: "clock", value: formatter.string(from: processedAt)))
+        }
+        
+        return items
     }
     
     private var noSelectionView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "doc.text")
-                .font(.system(size: 36))
-                .foregroundStyle(.tertiary)
-            Text("No Selection")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-            Text("Select a document to preview its content.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    
-    private func previewToolbar(for doc: Document) -> some View {
-        HStack(spacing: 8) {
-            Text(doc.displayName)
-                .font(.system(size: 13, weight: .semibold))
-                .lineLimit(1)
-                .truncationMode(.middle)
-            
-            Spacer()
-            
-            Picker("", selection: $previewMode) {
-                Text("Rendered").tag(PreviewMode.rendered)
-                Text("Raw").tag(PreviewMode.raw)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 130)
-            
-            Divider().frame(height: 16)
-            
-            Button { appState.exportSelectedDocument() } label: {
-                Image(systemName: "square.and.arrow.up")
-            }
-            .buttonStyle(.borderless)
-            .help("Export (⌘E)")
-            
-            Button { appState.copySelectedToClipboard() } label: {
-                Image(systemName: "doc.on.doc")
-            }
-            .buttonStyle(.borderless)
-            .help("Copy to Clipboard (⇧⌘C)")
-            
-            Button { appState.requestDeleteSelectedLibraryDocument() } label: {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless)
-            .help("Delete (⌫)")
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        EmptyStateView(
+            icon: "doc.text",
+            title: "No Selection",
+            description: "Select a document to preview its content."
+        )
     }
     
     @ViewBuilder
@@ -364,40 +380,62 @@ struct LibraryView: View {
             ScrollView {
                 switch previewMode {
                 case .rendered:
-                    // Use paged preview for multi-page documents to show page markers
                     if result.pages.count > 1 {
                         PagedMarkdownPreview(
                             pages: result.pages,
                             showPageMarkers: true,
                             scrollToPage: appState.selectedPageIndex
                         )
-                        .padding(20)
+                        .padding(DesignConstants.Spacing.xl)
                     } else {
-                        // Single page - use simpler view without markers
                         MarkdownPreview(markdown: result.fullMarkdown)
-                            .padding(20)
+                            .padding(DesignConstants.Spacing.xl)
                     }
+                    
                 case .raw:
-                    // Use paged raw preview for multi-page documents
                     if result.pages.count > 1 {
                         PagedRawPreview(
                             pages: result.pages,
                             showPageMarkers: true,
                             scrollToPage: appState.selectedPageIndex
                         )
-                        .padding(20)
+                        .padding(DesignConstants.Spacing.xl)
                     } else {
-                        // Single page - simpler raw view
                         Text(result.fullMarkdown)
                             .font(.system(size: 12, design: .monospaced))
                             .textSelection(.enabled)
-                            .padding(20)
+                            .padding(DesignConstants.Spacing.xl)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    
+                case .cleaned:
+                    if let cleanedContent = doc.cleanedContent {
+                        MarkdownPreview(markdown: cleanedContent.cleanedMarkdown)
+                            .padding(DesignConstants.Spacing.xl)
+                    } else {
+                        VStack(spacing: DesignConstants.Spacing.md) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 32))
+                                .foregroundStyle(.tertiary)
+                            Text("No Cleaned Content")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text("This document hasn't been cleaned yet.")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                            Button("Clean Now") {
+                                appState.cleanSelectedDocument()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.purple)
+                            .controlSize(.small)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
             }
         } else {
-            VStack(spacing: 8) {
+            VStack(spacing: DesignConstants.Spacing.sm) {
                 Image(systemName: "doc.questionmark")
                     .font(.system(size: 32))
                     .foregroundStyle(.tertiary)
@@ -408,29 +446,96 @@ struct LibraryView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
+}
+
+// MARK: - Library Document Row
+
+/// A simplified document row for the Library tab.
+/// Line 1: Icon + Name + Status Icons (trailing)
+/// Line 2: Pipeline Badges + Cost
+struct LibraryDocumentRow: View {
+    let document: Document
     
-    private func previewFooter(for doc: Document) -> some View {
-        HStack(spacing: 12) {
-            if let result = doc.result {
-                Label("\(result.pageCount) pages", systemImage: "doc.text")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                Label("\(result.wordCount.formatted()) words", systemImage: "textformat")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                Label(result.formattedTokenCount + " tokens", systemImage: "number")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+    /// Whether this document has an actual OCR result (not direct text import)
+    private var hasOCRResult: Bool {
+        guard let result = document.result else { return false }
+        return result.model != "direct-text-import"
+    }
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            documentIcon
+            
+            VStack(alignment: .leading, spacing: 3) {
+                // Line 1: Document name
+                Text(document.displayName)
+                    .font(DesignConstants.Typography.documentName)
+                    .lineLimit(1)
+                
+                // Line 2: Pipeline badges (simplified - cost shown in footer total)
+                pipelineBadges
             }
+            
             Spacer()
-            if let date = doc.processedAt {
-                Text(date, style: .relative)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+            
+            // Trailing: Status icons (vertically centered)
+            statusIcons
+        }
+        .padding(.vertical, DesignConstants.Layout.documentRowPadding)
+    }
+    
+    // MARK: - Pipeline Badges (Line 2)
+    
+    private var pipelineBadges: some View {
+        HStack(spacing: DesignConstants.Spacing.xs) {
+            // OCR badge (if OCR was performed)
+            if hasOCRResult {
+                PipelineBadge(text: "OCR", color: .blue)
+            }
+            
+            // Cleaned badge (if applicable)
+            if document.isCleaned {
+                PipelineBadge(text: "Cleaned", color: .purple)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+    }
+    
+    // MARK: - Status Icons (Trailing)
+    
+    private var statusIcons: some View {
+        PipelineStatusIcons(document: document)
+    }
+    
+    // MARK: - Document Icon
+    
+    private var documentIcon: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: DesignConstants.Icons.documentRowCornerRadius)
+                .fill(Color.green.opacity(0.15))
+                .frame(
+                    width: DesignConstants.Icons.documentRowWidth,
+                    height: DesignConstants.Icons.documentRowHeight
+                )
+            
+            Image(systemName: iconName)
+                .font(DesignConstants.Icons.documentRowIconFont)
+                .foregroundStyle(.green)
+        }
+    }
+    
+    private var iconName: String {
+        if document.contentType.conforms(to: .pdf) {
+            return "doc.fill"
+        } else if document.contentType.conforms(to: .image) {
+            return "photo.fill"
+        } else if document.contentType.conforms(to: .plainText) ||
+                  document.contentType.conforms(to: .text) ||
+                  document.fileExtension == "md" ||
+                  document.fileExtension == "txt" ||
+                  document.fileExtension == "rtf" {
+            return "doc.text.fill"
+        }
+        return "doc.fill"
     }
 }
 
@@ -458,7 +563,7 @@ struct MarkdownPreview: View {
         if trimmed.isEmpty {
             EmptyView()
         } else if trimmed == "---" || trimmed == "***" || trimmed == "___" {
-            Divider().padding(.vertical, 4)
+            Divider().padding(.vertical, DesignConstants.Spacing.xs)
         } else if trimmed.hasPrefix("# ") {
             Text(String(trimmed.dropFirst(2)))
                 .font(.system(size: 20, weight: .bold))
@@ -474,10 +579,10 @@ struct MarkdownPreview: View {
         } else if trimmed.hasPrefix("|") {
             Text(trimmed)
                 .font(.system(size: 11, design: .monospaced))
-                .padding(8)
+                .padding(DesignConstants.Spacing.sm)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(4)
+                .background(DesignConstants.Colors.statsBarBackground)
+                .cornerRadius(DesignConstants.CornerRadius.sm)
         } else if trimmed.hasPrefix("```") {
             let code = trimmed
                 .replacingOccurrences(of: "```swift\n", with: "")
@@ -486,17 +591,17 @@ struct MarkdownPreview: View {
                 .replacingOccurrences(of: "```", with: "")
             Text(code)
                 .font(.system(size: 11, design: .monospaced))
-                .padding(8)
+                .padding(DesignConstants.Spacing.sm)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(4)
+                .background(DesignConstants.Colors.statsBarBackground)
+                .cornerRadius(DesignConstants.CornerRadius.sm)
         } else if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
             let lines = trimmed.components(separatedBy: "\n")
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: DesignConstants.Spacing.xs) {
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                     let t = line.trimmingCharacters(in: .whitespaces)
                     if t.hasPrefix("- ") || t.hasPrefix("* ") {
-                        HStack(alignment: .top, spacing: 6) {
+                        HStack(alignment: .top, spacing: DesignConstants.Spacing.sm) {
                             Text("•").foregroundStyle(.secondary)
                             Text(String(t.dropFirst(2)))
                         }

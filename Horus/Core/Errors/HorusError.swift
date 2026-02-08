@@ -15,6 +15,8 @@ enum HorusError: Error, LocalizedError {
     case keychain(KeychainError)
     case export(ExportError)
     case session(SessionError)
+    case documentNotProcessed
+    case featureNotImplemented(String)
     
     var errorDescription: String? {
         switch self {
@@ -30,6 +32,10 @@ enum HorusError: Error, LocalizedError {
             return error.localizedDescription
         case .session(let error):
             return error.localizedDescription
+        case .documentNotProcessed:
+            return "Document Not Processed"
+        case .featureNotImplemented(let feature):
+            return feature
         }
     }
     
@@ -47,6 +53,10 @@ enum HorusError: Error, LocalizedError {
             return "Check that you have write permission to the destination folder."
         case .session:
             return nil
+        case .documentNotProcessed:
+            return "This document hasn't been processed yet. Complete OCR or Cleaning before adding to Library."
+        case .featureNotImplemented:
+            return "This feature is coming in a future update."
         }
     }
     

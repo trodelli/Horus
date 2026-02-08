@@ -193,9 +193,21 @@ struct BatchExportSheetView: View {
                     .disabled(!viewModel.includeMetadata)
                 Toggle("Include processing time", isOn: $viewModel.includeProcessingTime)
                     .disabled(!viewModel.includeMetadata)
+                
+                // Cleaning report toggle - disabled if no documents have been cleaned
+                Toggle("Include cleaning report", isOn: $viewModel.includeCleaningReport)
+                    .disabled(!hasCleanedDocuments)
+                    .help(hasCleanedDocuments
+                        ? "Appends detailed pipeline metrics to exported files"
+                        : "No cleaned documents available")
             }
             .toggleStyle(.checkbox)
         }
+    }
+    
+    /// Whether any document has been cleaned
+    private var hasCleanedDocuments: Bool {
+        completedDocuments.contains { $0.cleanedContent != nil }
     }
     
     // MARK: - Config Footer

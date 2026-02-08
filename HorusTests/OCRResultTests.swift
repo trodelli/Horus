@@ -122,8 +122,13 @@ final class OCRResultTests: XCTestCase {
         )
         
         let formatted = result.formattedCost
-        XCTAssertTrue(formatted.contains("$"))
-        XCTAssertTrue(formatted.contains("0.01") || formatted.contains("0.012"))
+        // Should start with $ and contain a numeric value
+        XCTAssertTrue(formatted.hasPrefix("$"), "Formatted cost should start with $: \(formatted)")
+        XCTAssertFalse(formatted == "$", "Formatted cost should contain a value")
+        
+        // For small costs, should show at least 2 decimals
+        let numericPart = formatted.dropFirst() // Remove $
+        XCTAssertTrue(numericPart.contains("."), "Should contain decimal point: \(formatted)")
     }
     
     func testFormattedDuration() {

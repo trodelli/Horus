@@ -166,6 +166,9 @@ struct ExportConfiguration: Equatable {
     /// For Markdown: whether to include front matter (YAML header)
     var includeFrontMatter: Bool
     
+    /// For Markdown: whether to include cleaning report (HTML comment block at end)
+    var includeCleaningReport: Bool
+    
     /// Default configuration
     static let `default` = ExportConfiguration(
         format: .markdown,
@@ -173,7 +176,8 @@ struct ExportConfiguration: Equatable {
         includeCost: true,
         includeProcessingTime: true,
         prettyPrint: true,
-        includeFrontMatter: true
+        includeFrontMatter: true,
+        includeCleaningReport: true
     )
     
     /// Minimal configuration (content only)
@@ -183,7 +187,8 @@ struct ExportConfiguration: Equatable {
         includeCost: false,
         includeProcessingTime: false,
         prettyPrint: false,
-        includeFrontMatter: false
+        includeFrontMatter: false,
+        includeCleaningReport: false
     )
 }
 
